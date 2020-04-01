@@ -3,10 +3,11 @@ use crate::{
     error::{DatabaseError, DatabaseResult},
     prelude::*,
 };
+use either::Either;
 use rkv::MultiStore;
 use std::{
     collections::HashMap,
-    iter::{Chain, Empty, Iterator, Map},
+    iter::{Chain, Iterator, Map},
 };
 
 /// Transactional operations on a KVV store
@@ -84,29 +85,13 @@ where
         // ```
         // Either<Either<__GetPersistedIter, Empty>, Either<__ScratchSpaceITer, Chain<...>>>
         // ```
-        use either::Either;
-
-        let persisted_result = self.get_persisted(k);
 
         let values_delta = if let Some(v) = self.scratch.get(k) {
             v
         } else {
-            let empty = std::iter::empty::<DatabaseResult<V>>();
-            let iter: Either<_, Empty<_>> = match persisted_result {
-                Ok(persisted) => Either::Left(persisted),
-                Err(DatabaseError::LmdbStoreError {
-                    source:
-                        failure::Compat {
-                            error: rkv::StoreError::LmdbError(rkv::LmdbError::NotFound),
-                        },
-                    ..
-                }) => Either::Right(empty),
-                err => return err,
-            };
-            return Ok(Either::Left(iter));
+            let persisted = Self::check_not_found(self.get_persisted(k))?;
+            return Ok(Either::Left(persisted));
         };
-
-        let persisted = persisted_result?;
 
         let ValuesDelta { delete_all, deltas } = values_delta;
 
@@ -120,6 +105,7 @@ where
             // skipping persisted content (as it will all be deleted)
             Either::Left(from_scratch_space)
         } else {
+            let persisted = Self::check_not_found(self.get_persisted(k))?;
             Either::Right(
                 from_scratch_space
                     // Otherwise, chain it with the persisted content,
@@ -168,6 +154,19 @@ where
             Ok((_, None)) => None,
             Err(e) => Some(Err(e.into())),
         }))
+    }
+    fn check_not_found(
+        persisted: DatabaseResult<impl Iterator<Item = DatabaseResult<V>>>,
+    ) -> DatabaseResult<impl Iterator<Item = DatabaseResult<V>>> {
+        let empty = std::iter::empty::<DatabaseResult<V>>();
+        match persisted {
+            Ok(persisted) => Ok(Either::Left(persisted)),
+            Err(DatabaseError::LmdbStoreError { source, .. }) => match source.into_inner() {
+                rkv::StoreError::LmdbError(rkv::LmdbError::NotFound) => Ok(Either::Right(empty)),
+                err => Err(err.into()),
+            },
+            Err(err) => Err(err),
+        }
     }
 }
 
