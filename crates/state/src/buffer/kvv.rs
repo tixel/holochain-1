@@ -4,7 +4,10 @@ use crate::{
     prelude::*,
 };
 use rkv::MultiStore;
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    iter::{Chain, Empty, Iterator, Map},
+};
 
 /// Transactional operations on a KVV store
 ///
@@ -79,17 +82,32 @@ where
         // any of three different iterator types, in order to unify all three
         // into a single type, we return (in the happy path) a value of type
         // ```
-        // Either<__GetPersistedIter, Either<__ScratchSpaceITer, Chain<...>>>
+        // Either<Either<__GetPersistedIter, Empty>, Either<__ScratchSpaceITer, Chain<...>>>
         // ```
         use either::Either;
 
-        let persisted = self.get_persisted(k)?;
+        let persisted_result = self.get_persisted(k);
 
         let values_delta = if let Some(v) = self.scratch.get(k) {
             v
         } else {
-            return Ok(Either::Left(persisted));
+            let empty = std::iter::empty::<DatabaseResult<V>>();
+            let iter: Either<_, Empty<_>> = match persisted_result {
+                Ok(persisted) => Either::Left(persisted),
+                Err(DatabaseError::LmdbStoreError {
+                    source:
+                        failure::Compat {
+                            error: rkv::StoreError::LmdbError(rkv::LmdbError::NotFound),
+                        },
+                    ..
+                }) => Either::Right(empty),
+                err => return err,
+            };
+            return Ok(Either::Left(iter));
         };
+
+        let persisted = persisted_result?;
+
         let ValuesDelta { delete_all, deltas } = values_delta;
 
         let from_scratch_space = deltas
@@ -97,7 +115,7 @@ where
             .filter(|(_v, op)| **op == Op::Insert)
             .map(|(v, _op)| Ok(v.clone()));
 
-        let iter = if *delete_all {
+        let iter: Either<Map<_, _>, Chain<_, _>> = if *delete_all {
             // If delete_all is set, return only scratch content,
             // skipping persisted content (as it will all be deleted)
             Either::Left(from_scratch_space)
