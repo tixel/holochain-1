@@ -392,4 +392,67 @@ pub mod tests {
         })
         .unwrap();
     }
+
+    #[tokio::test]
+    async fn lmdb_rkv_regression() {
+        let arc = test_cell_env();
+        {
+            let env = arc.guard().await;
+            let db = env
+                .inner()
+                .open_multi("kvv", StoreOptions::create())
+                .unwrap();
+
+            env.with_commit::<DatabaseError, _, _>(|writer| {
+                db.put(writer, &"i", &rkv::Value::U64(1)).unwrap();
+                // db.put(writer, &"i", &rkv::Value::U64(2)).unwrap();
+                // db.put(writer, &"j", &rkv::Value::U64(2)).unwrap();
+                db.put(writer, &"k", &rkv::Value::U64(3)).unwrap();
+                db.put(writer, &"k", &rkv::Value::U64(4)).unwrap();
+                Ok(())
+            })
+            .unwrap();
+        }
+
+        {
+            let env = arc.guard().await;
+            let db = env
+                .inner()
+                .open_multi("kvv", StoreOptions::create())
+                .unwrap();
+
+            env.with_reader::<DatabaseError, _, _>(|reader| {
+                let items: Vec<_> = db
+                    .get(&reader, &"i")
+                    .unwrap()
+                    .map(|pair| pair.unwrap().1.unwrap())
+                    .collect();
+                assert_eq!(items, vec![rkv::Value::U64(1)]);
+
+                let items: Vec<_> = db
+                    .get(&reader, &"k")
+                    .unwrap()
+                    .map(|pair| pair.unwrap().1.unwrap())
+                    .collect();
+                assert_eq!(items, vec![rkv::Value::U64(3), rkv::Value::U64(4)]);
+
+                let items: Vec<_> = db
+                    .get(&reader, &"j")
+                    .unwrap()
+                    .map(|pair| pair.unwrap().1.unwrap())
+                    .collect();
+                assert_eq!(items, vec![]);
+
+                let items: Vec<_> = db
+                    .get(&reader, &"a")
+                    .unwrap()
+                    .map(|pair| pair.unwrap().1.unwrap())
+                    .collect();
+                assert_eq!(items, vec![]);
+
+                Ok(())
+            })
+            .unwrap();
+        }
+    }
 }
