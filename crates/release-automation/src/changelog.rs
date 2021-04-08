@@ -3,8 +3,21 @@ use comrak::nodes::{AstNode, NodeValue};
 use comrak::{format_commonmark, parse_document, Arena, ComrakOptions};
 use std::path::PathBuf;
 
-pub fn process_changelogs(inputs: &[(&str, PathBuf)], output: &PathBuf) -> Fallible<()> {
-    todo!("aggregate {:?} into {:?}", inputs, output);
+pub fn process_unreleased(inputs: &[(&str, PathBuf)], output: &PathBuf) -> Fallible<()> {
+    let result = process_unreleased_strings(
+        &inputs
+            .iter()
+            .map(|(name, path)| (*name, std::fs::read_to_string(path).unwrap()))
+            .collect::<Vec<_>>(),
+        &std::fs::read_to_string(output)?,
+    )?;
+
+    let mut output_file = std::fs::File::create(output)?;
+
+    use std::io::Write;
+    output_file.write_all(result.as_bytes())?;
+
+    Ok(())
 }
 
 pub fn sanitize(s: String) -> String {
@@ -275,6 +288,7 @@ pub fn process_unreleased_strings(
 
 #[cfg(test)]
 mod test {
+    use super::*;
     use comrak::*;
 
     #[test]
@@ -304,7 +318,7 @@ publish-version: current
     }
 
     #[test]
-    fn changelog_aggregation() {
+    fn changelog_aggregation_strings() {
         const INPUTS: &[(&str, &str)] = &[
             (
                 "holochain_zome_types",
@@ -332,8 +346,6 @@ publish-version: current
             "/src/fixtures/changelog_aggregation/CHANGELOG_expected.md"
         ));
 
-        use crate::changelog::sanitize;
-
         let inputs_sanitized = INPUTS
             .into_iter()
             .map(|(name, input)| (*name, sanitize(input.to_string())))
@@ -347,6 +359,55 @@ publish-version: current
 
         let output_final_expected_sanitized = sanitize(OUTPUT_FINAL_EXPECTED.to_string());
 
+        assert_eq!(
+            result,
+            output_final_expected_sanitized,
+            "{}",
+            prettydiff::text::diff_lines(&result, &output_final_expected_sanitized).format()
+        );
+    }
+
+    #[test]
+    fn changelog_aggregation_files() {
+        let inputs: &[(&str, PathBuf)] = &[
+            (
+                "holochain_zome_types",
+                PathBuf::from(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/src/fixtures/changelog_aggregation/crates/holochain_zome_types/CHANGELOG.md"
+                )),
+            ),
+            (
+                "holochain",
+                PathBuf::from(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/src/fixtures/changelog_aggregation/crates/holochain/CHANGELOG.md"
+                )),
+            ),
+        ];
+
+        let output_original = {
+            let fixture = PathBuf::from(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/src/fixtures/changelog_aggregation/CHANGELOG.md"
+            ));
+
+            let tmpfile = tempfile::NamedTempFile::new().unwrap();
+            std::fs::copy(fixture, &tmpfile).unwrap();
+
+            tmpfile
+        };
+
+        const OUTPUT_FINAL_EXPECTED: &str = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/fixtures/changelog_aggregation/CHANGELOG_expected.md"
+        ));
+
+        crate::changelog::process_unreleased(inputs, &output_original.path().to_path_buf())
+            .unwrap();
+        let result = sanitize(std::fs::read_to_string(output_original.path()).unwrap());
+
+        let output_final_expected_sanitized = sanitize(OUTPUT_FINAL_EXPECTED.to_string());
         assert_eq!(
             result,
             output_final_expected_sanitized,
