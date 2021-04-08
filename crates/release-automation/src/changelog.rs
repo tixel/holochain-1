@@ -31,140 +31,191 @@ pub fn process_unreleased_strings(
     options.extension.front_matter_delimiter = Some("---".to_owned());
     options.render.hardbreaks = true;
 
-    let mut unreleased = vec![];
-
-    for (name, content) in inputs {
-        let arena = Arena::new();
-        let root = parse_document(&arena, content, &options);
-
-        'second: for (i, node) in root.children().enumerate() {
-            println!("[{}/{}]", name, i,);
-            match &mut node.data.borrow_mut().value {
-                &mut NodeValue::Heading(heading) => {
-                    println!("found heading with level {}", heading.level);
-                    // look for the 'unreleased' headings
-                    if heading.level == 2 {
-                        // `descentants()` starts with the node itself so we skip it
-                        for (_j, node_j) in node.descendants().enumerate().skip(1) {
-                            if let NodeValue::Text(ref text) = &node_j.data.borrow().value {
-                                let text_str = String::from_utf8_lossy(text);
-                                if text_str.to_lowercase().contains("unreleased") {
-                                    println!("[{}] found unreleased heading: {:#?}", i, text_str);
-
-                                    unreleased.push((name, i));
-                                    break 'second;
-                                }
-                            }
-                        }
-                    }
-                }
-                &mut NodeValue::Text(ref mut text) => {
-                    println!("found text: {}", String::from_utf8_lossy(text));
-                    // let orig = std::mem::replace(text, vec![]);
-                    // *text = String::from_utf8(orig)
-                    //     .unwrap()
-                    //     .replace("", "")
-                    //     .as_bytes()
-                    //     .to_vec();
-                }
-                &mut NodeValue::FrontMatter(ref fm) => {
-                    let fm_str = String::from_utf8(fm.to_vec()).unwrap();
-                    let fm_yaml = yaml_rust::yaml::YamlLoader::load_from_str(&fm_str).unwrap();
-                    println!("found a YAML front matter: {:#?}", fm_yaml);
-                }
-                pg @ &mut NodeValue::Paragraph => {
-                    println!("paragraph: {:#?}", pg);
-                }
-                other => {
-                    println!("{:#?}", other);
-                }
-            };
-        }
-    }
-
-    println!("{:#?}", unreleased);
-
-    // TODO: get the unreleased content for each input string
-
     let output_arena = Arena::new();
     let output_root = parse_document(&output_arena, output_original, &options);
 
-    let mut unreleased_found = false;
-    let mut remove_non_global = false;
+    let mut unreleased_node = None;
+    let mut first_release_reached = false;
 
-    'traversal: for (i, node_edge) in output_root.traverse().enumerate() {
-        use comrak::arena_tree::NodeEdge::{End, Start};
-
-        // let visited = std::collections::HashSet::new();
-        let mut visited_start: Vec<&comrak::arena_tree::Node<_>> = vec![];
-        let mut visited_end: Vec<&comrak::arena_tree::Node<_>> = vec![];
-
-        let node = match node_edge {
-            Start(n) => n,
-            End(n) => n,
-        };
-
-        if visited.iter().any(|existing| existing.same_node(node)) {
-            continue;
-        } else {
-            visited.push(node);
-        }
-
+    'traversal: for (i, node) in output_root.children().enumerate() {
         match &node.data.borrow().value {
             &NodeValue::Heading(heading) => {
-                for (j, node_j) in node.descendants().enumerate() {
-                    print!("[{}/{}] ", i, j);
-                    if let NodeValue::Text(ref text) = &node_j.data.borrow().value {
-                        let text_str = String::from_utf8_lossy(text);
+                print!("[{}] heading at level {}", i, heading.level);
 
-                        print!("heading at level {}: '{}'", heading.level, text_str);
-                        if unreleased_found {
-                            match heading.level {
-                                1 => {
-                                    println!(" => arrived at next release section, stopping.");
-                                    break 'traversal;
-                                }
-                                2 => {
-                                    if text_str.to_lowercase() == "global" {
-                                        print!(" => keeping");
-                                        remove_non_global = false;
-                                    } else {
-                                        print!(" => detaching");
-                                        remove_non_global = true;
-                                        node.detach();
-                                        node_j.detach();
-                                    }
-                                }
-                                _ => {}
-                            };
-                        } else if text_str.to_lowercase().contains("unreleased") {
-                            unreleased_found = true;
+                match (unreleased_node, heading.level) {
+                    (Some(_), 1) => {
+                        println!(" => arrived at next release section, stopping.");
+                        break 'traversal;
+                    }
+                    (Some(_), 2) => {
+                        first_release_reached = true;
+                        print!(" => detaching");
+                        node.detach();
+                    }
+                    (Some(_), _) => {}
+                    (None, 1) => {
+                        for (j, node_j) in node.descendants().enumerate().skip(1) {
+                            if let NodeValue::Text(ref text) = &node_j.data.borrow().value {
+                                let text_str = String::from_utf8_lossy(text);
+                                print!(" => [{}] found text '{}'", j, text_str);
+                                if text_str.to_lowercase().contains("unreleased") {
+                                    print!(" => found unreleased section");
+                                    unreleased_node = Some(node);
+                                    break;
+                                };
+                            }
                         }
                     }
-                    println!("");
-                }
+                    (None, _) => {}
+                };
+
+                println!("");
             }
 
             other => {
-                print!("[{}]", i);
-                if remove_non_global {
-                    print!(" detaching ");
-
-                    match other {
-                        NodeValue::Text(ref text) => {
-                            print!("'{}'", String::from_utf8_lossy(text))
-                        }
-                        _ => print!("{:?}", other),
-                    }
-
+                print!("[{}] ", i);
+                if unreleased_node.is_some() && first_release_reached {
+                    print!("detaching ");
                     node.detach();
+                } else {
+                    print!("keeping ");
                 }
+
+                match other {
+                    NodeValue::Text(ref text) => {
+                        print!("'{}'", String::from_utf8_lossy(text))
+                    }
+                    _ => print!("{:?}", other),
+                }
+
                 println!("");
             }
         };
     }
 
-    // TODO: insert the unreleased content into the output file
+    let input_arena = Arena::new();
+
+    // insert the unreleased content into the output file
+    if let Some(ref mut _unreleased_node) = unreleased_node {
+        let mut unreleased = vec![];
+
+        for (name, content) in inputs {
+            let root = parse_document(&input_arena, content, &options);
+
+            'second: for (i, node) in root.children().enumerate() {
+                {
+                    let children = node.children().collect::<Vec<_>>().len();
+                    let descendants = node.descendants().collect::<Vec<_>>().len();
+                    let debug = format!("{:#?}", node.data.borrow().value);
+                    let ty = debug.split(&['(', ' '][..]).nth(0).unwrap();
+                    println!(
+                        "[{}/{}] {} with {} child(ren) and {} descendant(s)",
+                        name, i, ty, children, descendants
+                    );
+                }
+
+                match &mut node.data.borrow_mut().value {
+                    &mut NodeValue::Heading(heading) => {
+                        println!(
+                            "[{}/{}] found heading with level {}",
+                            name, i, heading.level
+                        );
+                        // look for the 'unreleased' heading
+                        if heading.level == 2 {
+                            // `descendants()` starts with the node itself so we skip it
+                            let search = node
+                                .descendants()
+                                // .children()
+                                .skip(1)
+                                .collect::<Vec<_>>();
+
+                            println!("[{}/{}] searching through {} nodes", name, i, search.len());
+
+                            for (j, node_j) in search
+                                .iter()
+                                .take_while(|child| {
+                                    child.data.try_borrow().is_ok()
+                                    // let stop = if let Ok(data) = child.data.try_borrow() {
+                                    //     if let NodeValue::Heading(heading) = data.value {
+                                    //         heading.level > 2;
+                                    //     } else {
+                                    //         true
+                                    //     }
+                                    // } else {
+                                    //     false
+                                    // };
+                                })
+                                .enumerate()
+                            {
+                                match &mut node_j.data.borrow_mut().value {
+                                    NodeValue::Heading(heading) if heading.level < 3 => {
+                                        println!(
+                                            "[{}/{}/{}] arrived at first release heading, stopping.",
+                                            name, i, j
+                                        );
+                                        break;
+                                    }
+                                    NodeValue::Text(ref mut text) => {
+                                        let text_str = String::from_utf8_lossy(text);
+                                        if text_str.to_lowercase().contains("unreleased") {
+                                            println!(
+                                                "[{}/{}/{}] found unreleased heading: {:#?}",
+                                                name, i, j, text_str
+                                            );
+
+                                            *text = name.as_bytes().to_vec();
+                                            println!(
+                                                "[{}/{}/{}] changed name to {}",
+                                                name, i, j, name
+                                            );
+
+                                            // TODO: insert the unreleased content to the output document
+
+                                            // for child in node.children().take_while(|child| {
+                                            //     if let Ok(data) = child.data.try_borrow() {
+                                            //         if let NodeValue::Heading(heading) = data.value {
+                                            //             return heading.level < 2;
+                                            //         }
+                                            //     }
+                                            //     true
+                                            // }) {
+                                            //     _unreleased_node.append(child);
+                                            // }
+
+                                            unreleased.push((name, i));
+                                            // unreleased_content.push(named_content);
+                                            break 'second;
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                    // &mut NodeValue::Text(ref mut text) => {
+                    //     println!("found text: {}", String::from_utf8_lossy(text));
+                    //     // let orig = std::mem::replace(text, vec![]);
+                    //     // *text = String::from_utf8(orig)
+                    //     //     .unwrap()
+                    //     //     .replace("", "")
+                    //     //     .as_bytes()
+                    //     //     .to_vec();
+                    // }
+                    // &mut NodeValue::FrontMatter(ref fm) => {
+                    // let fm_str = String::from_utf8(fm.to_vec()).unwrap();
+                    // let fm_yaml = yaml_rust::yaml::YamlLoader::load_from_str(&fm_str).unwrap();
+                    // println!("[{}/{}] found a YAML front matter: {:#?}", name, i, fm_yaml);
+                    // }
+                    // pg @ &mut NodeValue::Paragraph => {
+                    //     println!("paragraph: {:#?}", pg);
+                    // }
+                    _ => {}
+                };
+            }
+        }
+
+        println!("{:#?}", unreleased);
+    }
 
     let mut buf = vec![];
     format_commonmark(output_root, &options, &mut buf)?;
@@ -207,11 +258,12 @@ publish-version: current
             (
                 "holochain_zome_types",
                 r#"---
+---
 # Changelog
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## _**[Unreleased]**_
+## [Unreleased]
 
 ### Changed
 - `Signature` is a 64 byte 'secure primitive'
@@ -266,12 +318,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 # [Unreleased]
-This release will be used to test the release automation tooling.
+The text beneath this heading will be retained which allows adding overarching release notes.
 
-## Global
-This heading name is reserved for manual changes in the toplevel changelog and won't be touched.
-
-## Not global
+## Something outdated maybe
 This will be removed.
 
 ## [holochain](crates/holochain/CHANGELOG.md#unreleased)
@@ -297,10 +346,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 # [Unreleased]
-This release will be used to test the release automation tooling.
-
-## Global
-This heading name is reserved for manual changes in the toplevel changelog and won't be touched.
+The text beneath this heading will be retained which allows adding overarching release notes.
 
 ## [holochain_zome_types](crates/holochain_zome_types/CHANGELOG.md#unreleased)
 
