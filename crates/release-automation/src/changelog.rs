@@ -22,6 +22,34 @@ pub fn sanitize(s: String) -> String {
     String::from_utf8(buf).unwrap()
 }
 
+fn print_node<'a>(
+    node: &'a comrak::arena_tree::Node<'a, core::cell::RefCell<comrak::nodes::Ast>>,
+    options: Option<ComrakOptions>,
+) {
+    let mut buf = vec![];
+    format_commonmark(node, &options.unwrap_or_default(), &mut buf).unwrap();
+    println!("{}", String::from_utf8(buf).unwrap())
+}
+
+fn recursive_node_fn<'a, F>(
+    node: &'a comrak::arena_tree::Node<'a, core::cell::RefCell<comrak::nodes::Ast>>,
+    _reverse: bool,
+    f: F,
+) where
+    F: FnOnce(&'a comrak::arena_tree::Node<'a, core::cell::RefCell<comrak::nodes::Ast>>),
+{
+    f(node);
+    for d in node.descendants().skip(1) {
+        recursive_detach(d)
+    }
+}
+
+fn recursive_detach<'a>(
+    node: &'a comrak::arena_tree::Node<'a, core::cell::RefCell<comrak::nodes::Ast>>,
+) {
+    recursive_node_fn(node, false, |n| n.detach());
+}
+
 pub fn process_unreleased_strings(
     inputs: &[(&str, String)],
     output_original: &str,
@@ -35,9 +63,10 @@ pub fn process_unreleased_strings(
     let output_root = parse_document(&output_arena, output_original, &options);
 
     let mut unreleased_node = None;
-    let mut first_release_reached = false;
+    let mut remove_other = false;
+    let mut topmost_release = None;
 
-    'traversal: for (i, node) in output_root.children().enumerate() {
+    'root: for (i, node) in output_root.children().enumerate() {
         match &node.data.borrow().value {
             &NodeValue::Heading(heading) => {
                 print!("[{}] heading at level {}", i, heading.level);
@@ -45,14 +74,14 @@ pub fn process_unreleased_strings(
                 match (unreleased_node, heading.level) {
                     (Some(_), 1) => {
                         println!(" => arrived at next release section, stopping.");
-                        break 'traversal;
+                        topmost_release = Some(node);
+                        break 'root;
                     }
-                    (Some(_), 2) => {
-                        first_release_reached = true;
+                    (Some(_), _) => {
                         print!(" => detaching");
+                        remove_other = true;
                         node.detach();
                     }
-                    (Some(_), _) => {}
                     (None, 1) => {
                         for (j, node_j) in node.descendants().enumerate().skip(1) {
                             if let NodeValue::Text(ref text) = &node_j.data.borrow().value {
@@ -61,6 +90,7 @@ pub fn process_unreleased_strings(
                                 if text_str.to_lowercase().contains("unreleased") {
                                     print!(" => found unreleased section");
                                     unreleased_node = Some(node);
+                                    remove_other = false;
                                     break;
                                 };
                             }
@@ -74,7 +104,7 @@ pub fn process_unreleased_strings(
 
             other => {
                 print!("[{}] ", i);
-                if unreleased_node.is_some() && first_release_reached {
+                if remove_other {
                     print!("detaching ");
                     node.detach();
                 } else {
@@ -94,15 +124,15 @@ pub fn process_unreleased_strings(
     }
 
     let input_arena = Arena::new();
-
     // insert the unreleased content into the output file
     if let Some(ref mut _unreleased_node) = unreleased_node {
-        let mut unreleased = vec![];
-
         for (name, content) in inputs {
             let root = parse_document(&input_arena, content, &options);
 
-            'second: for (i, node) in root.children().enumerate() {
+            let mut content_unreleased_heading = None;
+            let mut content_topmost_release = None;
+
+            for (i, node) in root.children().enumerate() {
                 {
                     let children = node.children().collect::<Vec<_>>().len();
                     let descendants = node.descendants().collect::<Vec<_>>().len();
@@ -121,7 +151,13 @@ pub fn process_unreleased_strings(
                             name, i, heading.level
                         );
                         // look for the 'unreleased' heading
-                        if heading.level == 2 {
+                        if heading.level == 2
+                            && content_unreleased_heading.is_some()
+                            && content_topmost_release.is_none()
+                        {
+                            println!("[{}/{}] found topmost release", name, i);
+                            content_topmost_release = Some(node);
+                        } else if heading.level == 2 {
                             // `descendants()` starts with the node itself so we skip it
                             let search = node
                                 .descendants()
@@ -162,29 +198,23 @@ pub fn process_unreleased_strings(
                                                 "[{}/{}/{}] found unreleased heading: {:#?}",
                                                 name, i, j, text_str
                                             );
+                                            content_unreleased_heading = Some(node);
 
-                                            *text = name.as_bytes().to_vec();
+                                            *text = format!(
+                                                "{}",
+                                                // TODO: insert link "[{}](crates/{}/CHANGELOG.md#unreleased)",
+                                                name,
+                                                // name,
+                                            )
+                                            .as_bytes()
+                                            .to_vec();
+
                                             println!(
                                                 "[{}/{}/{}] changed name to {}",
                                                 name, i, j, name
                                             );
 
-                                            // TODO: insert the unreleased content to the output document
-
-                                            // for child in node.children().take_while(|child| {
-                                            //     if let Ok(data) = child.data.try_borrow() {
-                                            //         if let NodeValue::Heading(heading) = data.value {
-                                            //             return heading.level < 2;
-                                            //         }
-                                            //     }
-                                            //     true
-                                            // }) {
-                                            //     _unreleased_node.append(child);
-                                            // }
-
-                                            unreleased.push((name, i));
-                                            // unreleased_content.push(named_content);
-                                            break 'second;
+                                            break;
                                         }
                                     }
                                     _ => {}
@@ -192,15 +222,6 @@ pub fn process_unreleased_strings(
                             }
                         }
                     }
-                    // &mut NodeValue::Text(ref mut text) => {
-                    //     println!("found text: {}", String::from_utf8_lossy(text));
-                    //     // let orig = std::mem::replace(text, vec![]);
-                    //     // *text = String::from_utf8(orig)
-                    //     //     .unwrap()
-                    //     //     .replace("", "")
-                    //     //     .as_bytes()
-                    //     //     .to_vec();
-                    // }
                     // &mut NodeValue::FrontMatter(ref fm) => {
                     // let fm_str = String::from_utf8(fm.to_vec()).unwrap();
                     // let fm_yaml = yaml_rust::yaml::YamlLoader::load_from_str(&fm_str).unwrap();
@@ -212,9 +233,25 @@ pub fn process_unreleased_strings(
                     _ => {}
                 };
             }
-        }
 
-        println!("{:#?}", unreleased);
+            let target = match (unreleased_node, topmost_release) {
+                (_, Some(node)) => node,
+                (Some(node), _) => node,
+                _ => panic!("expected at least one set"),
+            };
+
+            // add all siblings between here and the next headline and add all their descendants recursively
+            let count = content_unreleased_heading
+                .unwrap()
+                .following_siblings()
+                .take_while(|node| !node.same_node(content_topmost_release.unwrap()))
+                .inspect(|node| {
+                    target.insert_before(node);
+                })
+                .count();
+
+            println!("added {} items", count);
+        }
     }
 
     let mut buf = vec![];

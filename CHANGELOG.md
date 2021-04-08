@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 # [Unreleased]
+The text beneath this heading will be retained which allows adding overarching release notes.
+
+## will be removed
+will be removed
 
 # [20210304.120604]
 This will include the hdk-0.0.100 release.
