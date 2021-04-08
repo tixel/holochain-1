@@ -1,12 +1,11 @@
 use crate::Fallible;
 use comrak::nodes::{AstNode, NodeValue};
 use comrak::{format_commonmark, parse_document, Arena, ComrakOptions};
+use std::path::PathBuf;
 
-// pub fn process_changelogs(inputs: &[(&str, PathBuf)], _output: &PathBuf) -> Fallible<()> {
-//     let input_strings = inputs
-//     process_changelogs(inputs.map(|input| ), _output: &PathBuf)
-//     Ok(())
-// }
+pub fn process_changelogs(inputs: &[(&str, PathBuf)], output: &PathBuf) -> Fallible<()> {
+    todo!("aggregate {:?} into {:?}", inputs, output);
+}
 
 pub fn sanitize(s: String) -> String {
     let arena = Arena::new();
@@ -167,23 +166,19 @@ pub fn process_unreleased_strings(
 
                             println!("[{}/{}] searching through {} nodes", name, i, search.len());
 
+                            let mut recent_link_index = None;
+
                             for (j, node_j) in search
                                 .iter()
-                                .take_while(|child| {
-                                    child.data.try_borrow().is_ok()
-                                    // let stop = if let Ok(data) = child.data.try_borrow() {
-                                    //     if let NodeValue::Heading(heading) = data.value {
-                                    //         heading.level > 2;
-                                    //     } else {
-                                    //         true
-                                    //     }
-                                    // } else {
-                                    //     false
-                                    // };
-                                })
+                                .take_while(|child| child.data.try_borrow().is_ok())
                                 .enumerate()
                             {
                                 match &mut node_j.data.borrow_mut().value {
+                                    NodeValue::Link(ref mut link) => {
+                                        println!("[{}/{}/{}] found link {:#?}", name, i, j, link);
+                                        recent_link_index = Some(j);
+                                    }
+
                                     NodeValue::Heading(heading) if heading.level < 3 => {
                                         println!(
                                             "[{}/{}/{}] arrived at first release heading, stopping.",
@@ -200,19 +195,45 @@ pub fn process_unreleased_strings(
                                             );
                                             content_unreleased_heading = Some(node);
 
-                                            *text = format!(
-                                                "{}",
-                                                // TODO: insert link "[{}](crates/{}/CHANGELOG.md#unreleased)",
-                                                name,
-                                                // name,
-                                            )
-                                            .as_bytes()
-                                            .to_vec();
+                                            *text = format!("{}", name,).as_bytes().to_vec();
 
                                             println!(
                                                 "[{}/{}/{}] changed name to {}",
                                                 name, i, j, name
                                             );
+
+                                            let url =
+                                                format!("crates/{}/CHANGELOG.md#unreleased", name);
+
+                                            if let Some(link_index) = recent_link_index {
+                                                if let NodeValue::Link(ref mut link) =
+                                                    search[link_index].data.borrow_mut().value
+                                                {
+                                                    link.url = url.as_bytes().to_vec();
+                                                    println!(
+                                                        "[{}/{}/{}] changing link to: {:#?}",
+                                                        name, i, j, url
+                                                    );
+                                                }
+                                            } else {
+                                                let link_value =
+                                                    NodeValue::Link(comrak::nodes::NodeLink {
+                                                        url: url.as_bytes().to_vec(),
+                                                        title: Default::default(),
+                                                    });
+                                                let ast = comrak::nodes::Ast::new(link_value);
+                                                let link = output_arena.alloc(
+                                                    comrak::arena_tree::Node::new(
+                                                        core::cell::RefCell::new(ast),
+                                                    ),
+                                                );
+                                                // insert the link node before the text node
+                                                node_j.insert_before(link);
+
+                                                // attach the text node as a child of the link
+                                                node_j.detach();
+                                                link.append(node_j);
+                                            }
 
                                             break;
                                         }
@@ -226,9 +247,6 @@ pub fn process_unreleased_strings(
                     // let fm_str = String::from_utf8(fm.to_vec()).unwrap();
                     // let fm_yaml = yaml_rust::yaml::YamlLoader::load_from_str(&fm_str).unwrap();
                     // println!("[{}/{}] found a YAML front matter: {:#?}", name, i, fm_yaml);
-                    // }
-                    // pg @ &mut NodeValue::Paragraph => {
-                    //     println!("paragraph: {:#?}", pg);
                     // }
                     _ => {}
                 };
