@@ -1,10 +1,8 @@
 ---
-# values: skip|dry-run|run
-mode: skip
-# values: skip|major|minor|patch|prerelease
-bump-version: skip
-# values: current|next
-publish-version: skip
+releasable: true
+default-releasable: true
+bump-version: true
+default-bump-version: prerelease
 ---
 # Changelog
 

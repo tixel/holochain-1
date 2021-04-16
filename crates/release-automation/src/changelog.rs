@@ -283,7 +283,7 @@ pub fn process_unreleased_strings(
 
     let mut buf = vec![];
     format_commonmark(output_root, &options, &mut buf)?;
-    String::from_utf8(buf).map_err(|e| e.to_string().into())
+    String::from_utf8(buf).map_err(Into::into)
 }
 
 #[cfg(test)]
@@ -324,26 +324,26 @@ publish-version: current
                 "holochain_zome_types",
                 include_str!(concat!(
                     env!("CARGO_MANIFEST_DIR"),
-                    "/src/fixtures/changelog_aggregation/crates/holochain_zome_types/CHANGELOG.md"
+                    "/src/fixtures/example_workspace/crates/holochain_zome_types/CHANGELOG.md"
                 )),
             ),
             (
                 "holochain",
                 include_str!(concat!(
                     env!("CARGO_MANIFEST_DIR"),
-                    "/src/fixtures/changelog_aggregation/crates/holochain/CHANGELOG.md"
+                    "/src/fixtures/example_workspace/crates/holochain/CHANGELOG.md"
                 )),
             ),
         ];
 
         const OUTPUT_ORIGINAL: &str = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/src/fixtures/changelog_aggregation/CHANGELOG.md"
+            "/src/fixtures/example_workspace/CHANGELOG.md"
         ));
 
         const OUTPUT_FINAL_EXPECTED: &str = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/src/fixtures/changelog_aggregation/CHANGELOG_expected.md"
+            "/src/fixtures/example_workspace/CHANGELOG_expected.md"
         ));
 
         let inputs_sanitized = INPUTS
@@ -374,14 +374,14 @@ publish-version: current
                 "holochain_zome_types",
                 PathBuf::from(concat!(
                     env!("CARGO_MANIFEST_DIR"),
-                    "/src/fixtures/changelog_aggregation/crates/holochain_zome_types/CHANGELOG.md"
+                    "/src/fixtures/example_workspace/crates/holochain_zome_types/CHANGELOG.md"
                 )),
             ),
             (
                 "holochain",
                 PathBuf::from(concat!(
                     env!("CARGO_MANIFEST_DIR"),
-                    "/src/fixtures/changelog_aggregation/crates/holochain/CHANGELOG.md"
+                    "/src/fixtures/example_workspace/crates/holochain/CHANGELOG.md"
                 )),
             ),
         ];
@@ -389,7 +389,7 @@ publish-version: current
         let output_original = {
             let fixture = PathBuf::from(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/src/fixtures/changelog_aggregation/CHANGELOG.md"
+                "/src/fixtures/example_workspace/CHANGELOG.md"
             ));
 
             let tmpfile = tempfile::NamedTempFile::new().unwrap();
@@ -400,7 +400,7 @@ publish-version: current
 
         const OUTPUT_FINAL_EXPECTED: &str = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/src/fixtures/changelog_aggregation/CHANGELOG_expected.md"
+            "/src/fixtures/example_workspace/CHANGELOG_expected.md"
         ));
 
         crate::changelog::process_unreleased(inputs, &output_original.path().to_path_buf())

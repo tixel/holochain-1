@@ -4,8 +4,9 @@
 use comrak::{format_commonmark, parse_document, Arena, ComrakOptions};
 
 pub mod changelog;
+pub mod crate_selection;
 
-type Fallible<T> = Result<T, Box<dyn std::error::Error>>;
+type Fallible<T> = anyhow::Result<T>;
 
 pub(crate) mod cli {
     use std::path::PathBuf;
