@@ -1,8 +1,9 @@
 //! Select which crates to include in the release process.
 
+use crate::changelog::CrateChangelog;
 use crate::Fallible;
 
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 use once_cell::unsync::{Lazy, OnceCell};
 use std::cell::Cell;
 use std::path::PathBuf;
@@ -14,25 +15,38 @@ mod aliases {
 }
 use aliases::*;
 
-#[derive(Debug, PartialEq)]
-struct ReleaseCrate {
-    // changelog: OnceCell<Changelog>,
+struct Crate<'a> {
     // dependencies: Vec<&'a Self>,
     package: CargoPackage,
+    changelog: Option<CrateChangelog<'a>>,
 }
 
-impl ReleaseCrate {
-    pub fn name(&self) -> String {
+impl<'a> Crate<'a> {
+    pub(crate) fn with_cargo_package(package: CargoPackage) -> Fallible<Self> {
+        let changelog = {
+            let changelog_path = package.root().join("CHANGELOG.md");
+            if changelog_path.exists() {
+                Some(crate::changelog::CrateChangelog::try_from_path(
+                    &changelog_path,
+                )?)
+            } else {
+                None
+            }
+        };
+
+        Ok(Self { package, changelog })
+    }
+
+    pub(crate) fn name(&self) -> String {
         self.package.name().to_string()
     }
 }
 
-#[derive(Debug)]
 struct ReleaseWorkspace<'a> {
     root_path: PathBuf,
     cargo_config: cargo::util::config::Config,
     cargo_workspace: OnceCell<CargoWorkspace<'a>>,
-    release_crates: OnceCell<Vec<ReleaseCrate>>,
+    crates: OnceCell<Vec<Crate<'a>>>,
 }
 
 impl<'a> ReleaseWorkspace<'a> {
@@ -42,7 +56,7 @@ impl<'a> ReleaseWorkspace<'a> {
             cargo_config: cargo::util::config::Config::default()?,
 
             cargo_workspace: Default::default(),
-            release_crates: Default::default(),
+            crates: Default::default(),
         };
 
         // todo: ensure the workspace is valid, but the following fails lifetime checks
@@ -51,39 +65,29 @@ impl<'a> ReleaseWorkspace<'a> {
         Ok(new)
     }
 
-    // fn cargo_config(&'a self) -> &'a cargo::util::config::Config {
-    // self.cargo_config
-    //     .get_or_try_init(|| cargo::util::config::Config::default())
-    // }
-
     fn cargo_workspace(&'a self) -> Fallible<&'a CargoWorkspace> {
         self.cargo_workspace.get_or_try_init(|| {
             CargoWorkspace::new(&self.root_path.join("Cargo.toml"), &self.cargo_config)
         })
     }
 
-    fn release_crates(&'a self) -> Fallible<&'a Vec<ReleaseCrate>> {
-        self.release_crates.get_or_try_init(|| {
-            let mut release_crates = vec![];
+    fn crates(&'a self) -> Fallible<&'a Vec<Crate>> {
+        self.crates.get_or_try_init(|| {
+            let mut crates = vec![];
 
             for package in self.cargo_workspace()?.members() {
-                release_crates.push(ReleaseCrate {
-                    package: package.to_owned(),
-                });
+                crates.push(Crate::with_cargo_package(package.to_owned())?);
             }
 
-            Ok(release_crates)
+            Ok(crates)
         })
     }
 
-    pub fn releasable_crates(&'a mut self) -> Fallible<Vec<ReleaseCrate>> {
+    pub fn releasable_crates(&'a mut self) -> Fallible<Vec<Crate>> {
         let releasable_crates = vec![];
 
-        let workspace = &self.cargo_workspace()?;
-
-        println!("root: {:#?}", workspace.root());
-
-        // todo: determine all non-excluded workspace members
+        // determine all non-excluded workspace members
+        let _crates = self.crates()?;
 
         // todo: determine which crates have `releasable = false` in their CHANGELOG
 
@@ -151,6 +155,30 @@ mod test {
     }
 
     #[test]
+    fn workspace_crates() {
+        // let changed_files = changed_files(&workspace_path, "HEAD", "HEAD");
+        let workspace = ReleaseWorkspace::try_new(PathBuf::from(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/fixtures/example_workspace"
+        )))
+        .unwrap();
+
+        let result = workspace
+            .crates()
+            .unwrap()
+            .into_iter()
+            .map(|crt| crt.name().to_owned())
+            .collect::<Vec<_>>();
+
+        let expected_result = ["holochain-fixture", "holochain_zome_types-fixture"]
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect::<Vec<_>>();
+
+        assert_eq!(expected_result, result);
+    }
+
+    #[test]
     fn workspace_crate_selection() {
         // let changed_files = changed_files(&workspace_path, "HEAD", "HEAD");
         let mut workspace = ReleaseWorkspace::try_new(PathBuf::from(concat!(
@@ -169,7 +197,7 @@ mod test {
         let expected_result = ["holochain", "holochain_zome_types"]
             .iter()
             .map(std::string::ToString::to_string)
-            // .map(|name| ReleaseCrate {
+            // .map(|name| Crate {
             //     name,
             //     ..Default::default()
             // })

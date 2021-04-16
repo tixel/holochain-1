@@ -1,9 +1,118 @@
 use crate::Fallible;
+use comrak::nodes::Ast;
 use comrak::nodes::{AstNode, NodeValue};
 use comrak::{format_commonmark, parse_document, Arena, ComrakOptions};
+use once_cell::unsync::OnceCell;
+use semver::Version;
+use serde::Deserialize;
+use smart_default::SmartDefault;
+use std::cell::RefCell;
 use std::path::PathBuf;
+use std::time::SystemTime;
 
-pub fn process_unreleased(inputs: &[(&str, PathBuf)], output: &PathBuf) -> Fallible<()> {
+#[derive(Debug, PartialEq, Deserialize, SmartDefault)]
+pub(crate) struct Frontmatter {
+    releasable: Option<bool>,
+
+    #[default(Some(true))]
+    default_releasable: Option<bool>,
+}
+
+#[derive(Debug, PartialEq)]
+pub(crate) struct WorkspaceChangelog {}
+
+#[derive(Debug, PartialEq)]
+pub(crate) struct WorkspaceReleaseHeading {
+    time: SystemTime,
+    crates: String,
+}
+
+#[derive(Debug, PartialEq)]
+pub(crate) enum WorkspaceRelease {
+    Unreleased,
+    Release(WorkspaceReleaseHeading),
+}
+
+pub(crate) struct CrateChangelog<'a> {
+    path: PathBuf,
+    arena: Arena<AstNode<'a>>,
+    root: OnceCell<&'a comrak::arena_tree::Node<'a, RefCell<Ast>>>,
+}
+
+impl<'a> CrateChangelog<'a> {
+    /// Try to instantiate from parse.
+    /// FIXME: Eagerly parse the changelog to raise errors from this fn instead of `Self::root()`.
+    pub(crate) fn try_from_path(path: &PathBuf) -> Fallible<Self> {
+        let path = path.to_owned();
+        let arena = Arena::new();
+        let root = { Default::default() };
+
+        Ok(Self { path, arena, root })
+    }
+
+    /// Find and parse the frontmatter of this crate's changelog file.
+    pub(crate) fn front_matter(&'a self) -> Fallible<Option<Frontmatter>> {
+        let root = self.root()?;
+
+        for (i, node) in root.children().enumerate() {
+            {
+                let children = node.children().collect::<Vec<_>>().len();
+                let descendants = node.descendants().collect::<Vec<_>>().len();
+                let debug = format!("{:#?}", node.data.borrow().value);
+                let ty = debug
+                    .split(&['(', ' '][..])
+                    .nth(0)
+                    .ok_or_else(|| format!("error extracting type from '{}'", debug))
+                    .map_err(anyhow::Error::msg)?;
+                println!(
+                    "[{}] {} with {} child(ren) and {} descendant(s)",
+                    i, ty, children, descendants
+                );
+            }
+
+            match &mut node.data.borrow_mut().value {
+                &mut NodeValue::FrontMatter(ref fm) => {
+                    let fm_str = String::from_utf8(fm.to_vec())?
+                        .replace("---", "")
+                        .trim()
+                        .to_owned();
+                    let fm_yaml = yaml_rust::yaml::YamlLoader::load_from_str(&fm_str).unwrap();
+                    println!(
+                        "found a YAML front matter: {:#?}\nsource string: \n{}",
+                        fm_yaml, fm_str
+                    );
+
+                    let fm: Frontmatter = serde_yaml::from_str(&fm_str)?;
+                    println!("[{}] found a YAML front matter: {:#?}", i, fm);
+                    return Ok(Some(fm));
+                }
+
+                // we're only interested in the frontmatter here
+                _ => {}
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// Find a list of releases for this crate.
+    pub(crate) fn releases(&self) -> Fallible<Vec<WorkspaceRelease>> {
+        todo!("")
+    }
+
+    fn root(&'a self) -> Fallible<&&'a comrak::arena_tree::Node<'a, RefCell<Ast>>> {
+        self.root.get_or_try_init(|| {
+            let s = std::fs::read_to_string(&self.path)?;
+            let mut options = ComrakOptions::default();
+            options.parse.smart = true;
+            options.extension.front_matter_delimiter = Some("---".to_owned());
+            options.render.hardbreaks = true;
+            Ok(parse_document(&self.arena, &s, &options))
+        })
+    }
+}
+
+fn process_unreleased(inputs: &[(&str, PathBuf)], output: &PathBuf) -> Fallible<()> {
     let result = process_unreleased_strings(
         &inputs
             .iter()
@@ -20,7 +129,7 @@ pub fn process_unreleased(inputs: &[(&str, PathBuf)], output: &PathBuf) -> Falli
     Ok(())
 }
 
-pub fn sanitize(s: String) -> String {
+fn sanitize(s: String) -> String {
     let arena = Arena::new();
     let mut options = ComrakOptions::default();
     options.parse.smart = true;
@@ -62,7 +171,7 @@ fn recursive_detach<'a>(
     recursive_node_fn(node, false, |n| n.detach());
 }
 
-pub fn process_unreleased_strings(
+fn process_unreleased_strings(
     inputs: &[(&str, String)],
     output_original: &str,
 ) -> Fallible<String> {
@@ -252,11 +361,6 @@ pub fn process_unreleased_strings(
                             }
                         }
                     }
-                    // &mut NodeValue::FrontMatter(ref fm) => {
-                    // let fm_str = String::from_utf8(fm.to_vec()).unwrap();
-                    // let fm_yaml = yaml_rust::yaml::YamlLoader::load_from_str(&fm_str).unwrap();
-                    // println!("[{}/{}] found a YAML front matter: {:#?}", name, i, fm_yaml);
-                    // }
                     _ => {}
                 };
             }
@@ -293,28 +397,22 @@ mod test {
 
     #[test]
     fn test_frontmatter() {
-        const INPUT: &str = r#"---
-# values: skip|dry-run|run
-mode: skip
-# values: skip|major|minor|patch|prerelease
-bump-version: skip
-# values: current|next
-publish-version: current
----
-# Changelog
+        let fm_expected = super::Frontmatter {
+            releasable: Some(false),
+            default_releasable: Some(false),
+        };
 
-## Unreleased
-"#;
+        let path = PathBuf::from(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/fixtures/example_workspace/crates/holochain_zome_types/CHANGELOG.md"
+        ));
 
-        let mut options = ComrakOptions::default();
-        options.parse.smart = true;
-        options.extension.front_matter_delimiter = Some("---".to_owned());
-        options.render.hardbreaks = false;
-        let arena = Arena::new();
-        let root = parse_document(&arena, INPUT, &options);
-        let mut buf = Vec::new();
-        format_commonmark(&root, &options, &mut buf).unwrap();
-        assert_eq!(&String::from_utf8(buf).unwrap(), INPUT);
+        let clog = CrateChangelog::try_from_path(&path).expect("failed to create changelog");
+
+        assert_eq!(
+            Some(fm_expected),
+            clog.front_matter().expect("couldn't get front matter")
+        );
     }
 
     #[test]
