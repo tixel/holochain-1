@@ -12,10 +12,9 @@ use std::time::SystemTime;
 
 #[derive(Debug, PartialEq, Deserialize, SmartDefault)]
 pub(crate) struct Frontmatter {
-    releasable: Option<bool>,
+    unreleasable: Option<bool>,
 
-    #[default(Some(true))]
-    default_releasable: Option<bool>,
+    default_unreleasable: Option<bool>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -398,13 +397,13 @@ mod test {
     #[test]
     fn test_frontmatter() {
         let fm_expected = super::Frontmatter {
-            releasable: Some(false),
-            default_releasable: Some(false),
+            unreleasable: Some(true),
+            default_unreleasable: Some(true),
         };
 
         let path = PathBuf::from(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/src/fixtures/example_workspace/crates/holochain_zome_types/CHANGELOG.md"
+            "/src/fixtures/example_workspace/crates/unreleasable/CHANGELOG.md"
         ));
 
         let clog = CrateChangelog::try_from_path(&path).expect("failed to create changelog");

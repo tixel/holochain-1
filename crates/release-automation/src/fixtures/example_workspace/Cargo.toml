@@ -2,6 +2,7 @@
 members = [
         "crates/holochain",
         "crates/holochain_zome_types",
+        "crates/unreleasable",
 ]
 
 exclude = [

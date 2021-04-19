@@ -170,10 +170,14 @@ mod test {
             .map(|crt| crt.name().to_owned())
             .collect::<Vec<_>>();
 
-        let expected_result = ["holochain-fixture", "holochain_zome_types-fixture"]
-            .iter()
-            .map(std::string::ToString::to_string)
-            .collect::<Vec<_>>();
+        let expected_result = [
+            "holochain-fixture",
+            "holochain_zome_types-fixture",
+            "unreleasable",
+        ]
+        .iter()
+        .map(std::string::ToString::to_string)
+        .collect::<Vec<_>>();
 
         assert_eq!(expected_result, result);
     }
