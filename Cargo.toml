@@ -39,6 +39,9 @@ exclude = [
 
 # These are the default params for RELEASE target
 # Setting these for all dependencies... we'll only debug our own code
+
+cargo-features = ["profile-overrides"]
+
 [profile.dev.package."*"]
 opt-level = 3
 debug = false
