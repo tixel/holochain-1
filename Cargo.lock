@@ -1931,7 +1931,7 @@ dependencies = [
 [[package]]
 name = "holochain_wasmer_common"
 version = "0.0.67"
-source = "git+https://github.com/alastairong/holochain-wasmer?branch=master#b468eb9116e3295394aa4432a06b4edf86be235a"
+source = "git+https://github.com/alastairong/holochain-wasmer?branch=singlepass#067e50e8ba164d1395bff6fa4a686f26e30b18f8"
 dependencies = [
  "holochain_serialized_bytes",
  "serde",
@@ -1966,10 +1966,10 @@ dependencies = [
 [[package]]
 name = "holochain_wasmer_host"
 version = "0.0.67"
-source = "git+https://github.com/alastairong/holochain-wasmer?branch=master#b468eb9116e3295394aa4432a06b4edf86be235a"
+source = "git+https://github.com/alastairong/holochain-wasmer?branch=singlepass#067e50e8ba164d1395bff6fa4a686f26e30b18f8"
 dependencies = [
  "holochain_serialized_bytes",
- "holochain_wasmer_common 0.0.67 (git+https://github.com/alastairong/holochain-wasmer?branch=master)",
+ "holochain_wasmer_common 0.0.67 (git+https://github.com/alastairong/holochain-wasmer?branch=singlepass)",
  "lazy_static",
  "serde",
  "tracing",
@@ -5045,7 +5045,8 @@ checksum = "d9a543ae66aa233d14bb765ed9af4a33e81b8b58d1584cf1b47ff8cd0b9e4489"
 [[package]]
 name = "wasmer-runtime"
 version = "0.16.2"
-source = "git+https://github.com/alastairong/wasmer?branch=0.16.2-singlepass#86f71ff244f66a03ce7ddeb9be94d6edae4b0310"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "434a3454b98844e5d413ba21a2fa5931bb45bcdd8404bb6147b444d5cbf5a3d5"
 dependencies = [
  "lazy_static",
  "memmap",
@@ -5058,7 +5059,8 @@ dependencies = [
 [[package]]
 name = "wasmer-runtime-core"
 version = "0.16.2"
-source = "git+https://github.com/alastairong/wasmer?branch=0.16.2-singlepass#86f71ff244f66a03ce7ddeb9be94d6edae4b0310"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e32bdb04d008eb136c88a12c0fdfb7e5d7ff30b208af4bef1d292d863eb1ba2"
 dependencies = [
  "bincode",
  "blake3",
@@ -5086,7 +5088,8 @@ dependencies = [
 [[package]]
 name = "wasmer-singlepass-backend"
 version = "0.16.2"
-source = "git+https://github.com/alastairong/wasmer?branch=0.16.2-singlepass#86f71ff244f66a03ce7ddeb9be94d6edae4b0310"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4f850cf15c8d1d29e6010bd980206100cf58f0d4766216a7b24e6b590ab89c0"
 dependencies = [
  "bincode",
  "byteorder",
