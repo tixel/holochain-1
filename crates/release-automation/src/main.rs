@@ -3,8 +3,11 @@
 
 use comrak::{format_commonmark, parse_document, Arena, ComrakOptions};
 
-pub mod changelog;
-pub mod crate_selection;
+pub(crate) mod changelog;
+pub(crate) mod crate_selection;
+
+#[cfg(test)]
+pub(crate) mod tests;
 
 type Fallible<T> = anyhow::Result<T>;
 
