@@ -6,7 +6,8 @@ use crate::Fallible;
 use anyhow::{anyhow, bail};
 use once_cell::unsync::{Lazy, OnceCell};
 use std::cell::Cell;
-use std::path::PathBuf;
+use std::collections::BTreeSet;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 mod aliases {
@@ -16,12 +17,12 @@ mod aliases {
 use aliases::*;
 
 struct Crate<'a> {
-    // dependencies: Vec<&'a Self>,
     package: CargoPackage,
     changelog: Option<CrateChangelog<'a>>,
 }
 
 impl<'a> Crate<'a> {
+    /// Instantiate a new Crate with the given CargoPackage.
     pub(crate) fn with_cargo_package(package: CargoPackage) -> Fallible<Self> {
         let changelog = {
             let changelog_path = package.root().join("CHANGELOG.md");
@@ -37,8 +38,19 @@ impl<'a> Crate<'a> {
         Ok(Self { package, changelog })
     }
 
+    /// This crate's name as given in the Cargo.toml file
     pub(crate) fn name(&self) -> String {
         self.package.name().to_string()
+    }
+
+    /// This crate's changelog.
+    pub(crate) fn changelog(&'a self) -> Option<&CrateChangelog<'a>> {
+        self.changelog.as_ref()
+    }
+
+    /// Returns the crates in the same workspace that this crate depends on.
+    pub(crate) fn dependencies_in_workspace(&'a self) -> Fallible<&Crate<'a>> {
+        todo!("")
     }
 }
 
@@ -59,7 +71,7 @@ impl<'a> ReleaseWorkspace<'a> {
             crates: Default::default(),
         };
 
-        // todo: ensure the workspace is valid, but the following fails lifetime checks
+        // todo(optimization): eagerly ensure that the workspace is valid, but the following fails lifetime checks
         // let _ = new.cargo_workspace()?;
 
         Ok(new)
@@ -71,7 +83,47 @@ impl<'a> ReleaseWorkspace<'a> {
         })
     }
 
-    fn crates(&'a self) -> Fallible<&'a Vec<Crate>> {
+    /// Returns the crates that are going to be processed for release.
+    pub(crate) fn final_selection(&'a self) -> Fallible<Vec<&'a Crate>> {
+        let members = self.members()?;
+
+        let changed = changed_crates(members)?;
+        let releasable = releasable_crates(members)?;
+
+        let changed_and_unreleasable = changed.difference(&releasable);
+        println!(
+            "changed and unreleasable crates: {:#?}",
+            changed_and_unreleasable
+                .map(|i| members[*i].name())
+                .collect::<Vec<_>>()
+        );
+
+        let changed_and_releasable = changed.intersection(&releasable).collect::<BTreeSet<_>>();
+        println!(
+            "changed and releasable crates: {:#?}",
+            changed_and_releasable
+                .iter()
+                .map(|i| members[**i].name())
+                .collect::<Vec<_>>()
+        );
+
+        // todo(backlog): assert that no changed and releasable crate is blocked by having an unreleasable crate in its dependency tree"
+
+        Ok(members
+            .iter()
+            .enumerate()
+            .filter_map(|(i, c)| {
+                if changed_and_releasable.contains(&i) {
+                    Some(c)
+                } else {
+                    None
+                }
+            })
+            .collect())
+    }
+
+    /// Returns all non-excluded workspace members.
+    fn members(&'a self) -> Fallible<&'a Vec<Crate>> {
         self.crates.get_or_try_init(|| {
             let mut crates = vec![];
 
@@ -79,31 +131,92 @@ impl<'a> ReleaseWorkspace<'a> {
                 crates.push(Crate::with_cargo_package(package.to_owned())?);
             }
 
+            // todo: ensure members are ordered respecting their dependency tree
+
             Ok(crates)
         })
     }
-
-    pub fn releasable_crates(&'a mut self) -> Fallible<Vec<Crate>> {
-        let releasable_crates = vec![];
-
-        // determine all non-excluded workspace members
-        let _crates = self.crates()?;
-
-        // todo: determine which crates have `releasable = false` in their CHANGELOG
-
-        // todo: determine the previous release
-        // let changed_paths = changed_files(self.root_path, from_rev: &str, to_rev: &str);
-
-        // todo: determine which crates changed since the most recent release
-
-        // todo: determine whether any release is blocked by an unreleasable crate
-
-        Ok(releasable_crates)
-    }
 }
 
-// source: https://github.com/sunng87/cargo-release/blob/master/src/git.rs
-fn changed_files(dir: &PathBuf, from_rev: &str, to_rev: &str) -> Fallible<Vec<PathBuf>> {
+/// Filters the result of `Self::members` by crates that don't have `unreleasable = true` in their CHANGELOG.md front matter.
+fn releasable_crates<'a, C>(crates: C) -> Fallible<BTreeSet<usize>>
+where
+    C: std::iter::IntoIterator<Item = &'a Crate<'a>>,
+{
+    let mut releasable = BTreeSet::new();
+    for (index, candidate) in crates.into_iter().enumerate() {
+        match candidate.changelog().map(|cl| cl.front_matter()) {
+            // front matter found, include if unreleasable is not indicated
+            Some(Ok(Some(front_matter))) => {
+                if !front_matter.unreleasable() {
+                    releasable.insert(index);
+                }
+            }
+
+            // no front matter
+            Some(Ok(None)) => {
+                releasable.insert(index);
+            }
+
+            // error while getting the front matter
+            Some(Err(e)) => bail!(e),
+
+            // no changelog
+            None => println!("{} has no changelog, skipping..", candidate.name()),
+        }
+    }
+
+    Ok(releasable)
+}
+
+/// Returns the indices of all crates that changed since its last release.
+fn changed_crates<'a, C>(crates: C) -> Fallible<BTreeSet<usize>>
+where
+    C: std::iter::IntoIterator<Item = &'a Crate<'a>>,
+{
+    let mut changed = BTreeSet::new();
+
+    for (index, candidate) in crates.into_iter().enumerate() {
+        let previous_release: Option<&str> = {
+            // todo: determine the last release for each crate according to the changelog
+            Some("todo")
+        };
+
+        let git_tag = if let Some(previous_release) = previous_release {
+            let git_tag =
+                // todo: determine the git tag for the previous release
+                // todo: warn or fail if it's not present?
+                previous_release;
+
+            Some(git_tag)
+        } else {
+            None
+        };
+
+        let change_indicator = if let Some(git_tag) = git_tag {
+            let changed_files = changed_files(candidate.package.root(), git_tag, "HEAD")?;
+
+            if changed_files.len() > 0 {
+                Some(true)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        if let Some(true) = change_indicator {
+            changed.insert(index);
+        };
+    }
+
+    Ok(changed)
+}
+
+/// Use the `git` shell command to detect changed files in the given directory between the given revisions.
+///
+/// Inspired by: https://github.com/sunng87/cargo-release/blob/master/src/git.rs
+fn changed_files(dir: &Path, from_rev: &str, to_rev: &str) -> Fallible<Vec<PathBuf>> {
     use bstr::ByteSlice;
 
     let output = Command::new("git")
@@ -155,7 +268,7 @@ mod test {
     }
 
     #[test]
-    fn workspace_crates() {
+    fn workspace_members() {
         // let changed_files = changed_files(&workspace_path, "HEAD", "HEAD");
         let workspace = ReleaseWorkspace::try_new(PathBuf::from(concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -164,7 +277,7 @@ mod test {
         .unwrap();
 
         let result = workspace
-            .crates()
+            .members()
             .unwrap()
             .into_iter()
             .map(|crt| crt.name().to_owned())
@@ -183,22 +296,25 @@ mod test {
     }
 
     #[test]
-    fn workspace_crate_selection() {
-        // let changed_files = changed_files(&workspace_path, "HEAD", "HEAD");
-        let mut workspace = ReleaseWorkspace::try_new(PathBuf::from(concat!(
+    fn releasable_crates() {
+        let workspace = ReleaseWorkspace::try_new(PathBuf::from(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/src/fixtures/example_workspace"
         )))
         .unwrap();
 
-        let result = workspace
-            .releasable_crates()
+        let members = workspace.members().unwrap();
+
+        let result = super::releasable_crates(members)
             .unwrap()
             .into_iter()
-            .map(|crt| crt.name().to_owned())
+            .map(|index| {
+                let crt = members.get(index).unwrap();
+                crt.name().to_owned()
+            })
             .collect::<Vec<_>>();
 
-        let expected_result = ["holochain", "holochain_zome_types"]
+        let expected_result = ["holochain-fixture", "holochain_zome_types-fixture"]
             .iter()
             .map(std::string::ToString::to_string)
             // .map(|name| Crate {
@@ -208,5 +324,18 @@ mod test {
             .collect::<Vec<_>>();
 
         assert_eq!(expected_result, result);
+    }
+
+    #[test]
+    fn final_selection() {
+        let workspace = ReleaseWorkspace::try_new(PathBuf::from(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/fixtures/example_workspace"
+        )))
+        .unwrap();
+
+        workspace.final_selection().unwrap();
+
+        // todo: construct and assert a test case
     }
 }

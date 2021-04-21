@@ -17,6 +17,12 @@ pub(crate) struct Frontmatter {
     default_unreleasable: Option<bool>,
 }
 
+impl Frontmatter {
+    pub(crate) fn unreleasable(&self) -> bool {
+        self.unreleasable.unwrap_or_default()
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub(crate) struct WorkspaceChangelog {}
 
