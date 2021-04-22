@@ -64,14 +64,16 @@ struct ReleaseWorkspace<'a> {
 
 impl std::fmt::Debug for ReleaseWorkspace<'_> {
     fn fmt(&self, fmter: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        write!(
+        indoc::writedoc!(
             fmter,
-            r#"ReleaseWorkspace {{
-    root_path: {:?},
-    cargo_config: <omitted>
-    cargo_workspace: {:#?}
-    crates: {:#?}
-}}"#,
+            r#"
+            ReleaseWorkspace {{
+                root_path: {:?},
+                cargo_config: <omitted>
+                cargo_workspace: {:#?}
+                crates: {:#?}
+            }}
+            "#,
             self.root_path,
             self.cargo_workspace.get(),
             self.crates.get()
@@ -187,7 +189,13 @@ where
             }
 
             // error while getting the front matter
-            Some(Err(e)) => bail!(e),
+            Some(Err(e)) => {
+                use anyhow::Context;
+                return Err(e).context(format!(
+                    "when parsing front matter of crate '{}'",
+                    candidate.name()
+                ));
+            }
 
             // no changelog
             None => println!("{} has no changelog, skipping..", candidate.name()),

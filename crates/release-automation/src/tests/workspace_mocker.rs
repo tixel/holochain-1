@@ -54,7 +54,7 @@ impl WorkspaceMocker {
 
         let excluded = projects.iter().fold(String::new(), |acc, (name, project)| {
             if project.excluded {
-                acc + &format!(
+                acc + &indoc::formatdoc!(
                     r#"
                         "crates/{}",
                     "#,
@@ -67,14 +67,14 @@ impl WorkspaceMocker {
 
         let project_builder = ProjectBuilder::new(path).file(
             "Cargo.toml",
-            &format!(
+            &indoc::formatdoc!(
                 r#"
-                    [workspace]
-                    members = [ "crates/*" ]
-                    exclude = [
-                        {}
-                    ]
-                    "#,
+                [workspace]
+                members = [ "crates/*" ]
+                exclude = [
+                    {}
+                ]
+                "#,
                 excluded
             ),
         );
@@ -101,17 +101,19 @@ impl WorkspaceMocker {
                     let project_builder = project_builder
                         .file(
                             format!("crates/{}/Cargo.toml", &name),
-                            &format!(
+                            &indoc::formatdoc!(
                                 r#"
-                            [project]
-                            name = "{}"
-                            version = "{}"
-                            authors = []
+                                [project]
+                                name = "{}"
+                                version = "{}"
+                                authors = []
 
-                            [dependencies]
-                            {}
-                            "#,
-                                &name, &project.version, dependencies
+                                [dependencies]
+                                {}
+                                "#,
+                                &name,
+                                &project.version,
+                                dependencies
                             ),
                         )
                         .file(
@@ -192,34 +194,59 @@ pub(crate) fn example_workspace_1<'a>() -> Fallible<WorkspaceMocker> {
             excluded: false,
             ty: workspace_mocker::MockProjectType::Bin,
             changelog: Some(
-                r#"
-            ---
-            ---
-            # Changelog
+                indoc::indoc!(
+                    r#"
+                    ---
+                    ---
+                    # Changelog
 
-            ## [Unreleased]
-            Awesome changes!
-            "#
+                    The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+                    This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+                    *Note: Versions 0.0.52-alpha2 and older are part belong to previous iterations of the Holochain architecture and are not tracked here.*
+
+                    ## Unreleased
+
+                    ### Added
+
+                    - `InstallAppBundle` command added to admin conductor API. [#665](https://github.com/holochain/holochain/pull/665)
+                    - `DnaSource` in conductor_api `RegisterDna` call now can take a `DnaBundle` [#665](https://github.com/holochain/holochain/pull/665)
+
+                    ### Removed
+
+                    - BREAKING:  `InstallAppDnaPayload` in admin conductor API `InstallApp` command now only accepts a hash.  Both properties and path have been removed as per deprecation warning.  Use either `RegisterDna` or `InstallAppBundle` instead. [#665](https://github.com/holochain/holochain/pull/665)
+                    - BREAKING: `DnaSource(Path)` in conductor_api `RegisterDna` call now must point to `DnaBundle` as created by `hc dna pack` not a `DnaFile` created by `dna_util` [#665](https://github.com/holochain/holochain/pull/665)
+
+                    ## 0.0.1
+
+                    This is the first version number for the version of Holochain with a refactored state model (you may see references to it as Holochain RSM).
+                    "#
+                )
                 .to_string(),
             ),
         },
         MockProject {
             name: "crate_b".to_string(),
-            version: "0.0.1".to_string(),
+            version: "0.0.1-alpha.1".to_string(),
             dependencies: vec![],
             excluded: false,
             ty: workspace_mocker::MockProjectType::Lib,
-            changelog: Some(
+            changelog: Some(indoc::formatdoc!(
                 r#"
-            ---
-            ---
-            # Changelog
+                # Changelog
+                The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+                This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-            ## [Unreleased]
-            Awesome changes!
-        "#
-                .to_string(),
-            ),
+                ## [Unreleased]
+
+                ### Changed
+                - `Signature` is a 64 byte 'secure primitive'
+
+                ## 0.0.1-alpha.1
+
+                [Unreleased]: https://github.com/holochain/holochain/holochain_zome_types-v0.0.2-alpha.1...HEAD
+                "#
+            )),
         },
         MockProject {
             name: "crate_c".to_string(),
@@ -227,18 +254,21 @@ pub(crate) fn example_workspace_1<'a>() -> Fallible<WorkspaceMocker> {
             dependencies: vec![],
             excluded: false,
             ty: workspace_mocker::MockProjectType::Lib,
-            changelog: Some(
-                r#"---
-unreleasable: true
-default_unreleasable: true
----
-# Changelog
+            changelog: Some(indoc::formatdoc!(
+                r#"
+                ---
+                unreleasable: true
+                default_unreleasable: true
+                ---
+                # Changelog
+                Hello
 
-## [Unreleased]
-Awesome changes!
-        "#
-                .to_string(),
-            ),
+                ## [Unreleased]
+                Awesome changes!
+
+                [Unreleased]: file:///dev/null
+                "#
+            )),
         },
         MockProject {
             name: "crate_d".to_string(),
@@ -251,15 +281,34 @@ Awesome changes!
     ];
 
     WorkspaceMocker::try_new(
-        Some(
-            r#"
+        Some(indoc::indoc! {r#"
         # Changelog
-        Nothing here.
+        This file conveniently consolidates all of the crates individual CHANGELOG.md files and groups them by timestamps at which crates were released.
+        The file is updated every time one or more crates are released.
 
-        # Unreleased
-        Nothing here yet.
-        "#,
-        ),
+        The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+        This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+        # [Unreleased]
+        The text beneath this heading will be retained which allows adding overarching release notes.
+
+        ## Something outdated maybe
+        This will be removed.
+
+        ## [crate_a](crates/crate_a/CHANGELOG.md#unreleased)
+        ### Added
+
+        - `InstallAppBundle` command added to admin conductor API. [#665](https://github.com/holochain/holochain/pull/665)
+
+        # [20210304.120604]
+        This will include the hdk-0.0.100 release.
+
+        ## [hdk-0.0.100](crates/hdk/CHANGELOG.md#0.0.100)
+
+        ### Changed
+        - hdk: fixup the autogenerated hdk documentation.
+        "#
+        }),
         members,
     )
 }
@@ -273,10 +322,12 @@ mod tests {
         let workspace_mocker = example_workspace_1().unwrap();
         workspace_mocker.add_or_replace_file(
             "README",
-            r#"# Example
+            indoc::indoc! {r#"
+            # Example
 
-                Some changes
+            Some changes
             "#,
+            },
         );
         let before = workspace_mocker.head();
         let after = workspace_mocker.commit(None);

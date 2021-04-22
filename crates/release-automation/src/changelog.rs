@@ -9,7 +9,7 @@ use std::cell::RefCell;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Default, Debug, PartialEq, Deserialize)]
 pub(crate) struct Frontmatter {
     unreleasable: Option<bool>,
 
@@ -91,14 +91,18 @@ impl<'a> CrateChangelog<'a> {
                         .replace("---", "")
                         .trim()
                         .to_owned();
-                    let fm_yaml = yaml_rust::yaml::YamlLoader::load_from_str(&fm_str).unwrap();
+
+                    let fm: Frontmatter = if fm_str.is_empty() {
+                        Frontmatter::default()
+                    } else {
+                        serde_yaml::from_str(&fm_str)?
+                    };
+
                     println!(
-                        "found a YAML front matter: {:#?}\nsource string: \n{}",
-                        fm_yaml, fm_str
+                        "[{}] found a YAML front matter: {:#?}\nsource string: \n'{}'",
+                        i, fm, fm_str
                     );
 
-                    let fm: Frontmatter = serde_yaml::from_str(&fm_str)?;
-                    println!("[{}] found a YAML front matter: {:#?}", i, fm);
                     return Ok(Some(fm));
                 }
 
@@ -390,7 +394,15 @@ fn process_unreleased_strings(
             let count = content_unreleased_heading
                 .unwrap()
                 .following_siblings()
-                .take_while(|node| !node.same_node(content_topmost_release.unwrap()))
+                .take_while(|node| {
+                    if let Some(content_topmost_release) = content_topmost_release {
+                        !node.same_node(content_topmost_release)
+                    } else {
+                        // todo: handle the case where no previous release was found
+
+                        true
+                    }
+                })
                 .inspect(|node| {
                     target.insert_before(node);
                 })
@@ -406,126 +418,117 @@ fn process_unreleased_strings(
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
+    use crate::tests::workspace_mocker::example_workspace_1;
     use comrak::*;
 
     #[test]
-    fn test_frontmatter() {
-        let fm_expected = super::Frontmatter {
-            unreleasable: Some(true),
-            default_unreleasable: Some(true),
-        };
-
-        // todo: integrate this with workspace_mocker
-        let path = PathBuf::from(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/src/tests/fixtures/example_workspace/crates/unreleasable/CHANGELOG.md"
-        ));
-
-        let clog = CrateChangelog::try_from_path(&path).expect("failed to create changelog");
-
-        assert_eq!(
-            Some(fm_expected),
-            clog.front_matter().expect("couldn't get front matter")
-        );
-    }
-
-    #[test]
-    fn changelog_aggregation_strings() {
-        // todo: integrate this with workspace_mocker
-        const INPUTS: &[(&str, &str)] = &[
-            (
-                "holochain_zome_types",
-                include_str!(concat!(
-                    env!("CARGO_MANIFEST_DIR"),
-                    "/src/tests/fixtures/example_workspace/crates/holochain_zome_types/CHANGELOG.md"
-                )),
-            ),
-            (
-                "holochain",
-                include_str!(concat!(
-                    env!("CARGO_MANIFEST_DIR"),
-                    "/src/tests/fixtures/example_workspace/crates/holochain/CHANGELOG.md"
-                )),
-            ),
-        ];
-
-        // todo: integrate this with workspace_mocker
-        const OUTPUT_ORIGINAL: &str = include_str!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/src/tests/fixtures/example_workspace/CHANGELOG.md"
-        ));
-
-        // todo: integrate this with workspace_mocker
-        const OUTPUT_FINAL_EXPECTED: &str = include_str!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/src/tests/fixtures/example_workspace/CHANGELOG_expected.md"
-        ));
-
-        let inputs_sanitized = INPUTS
-            .into_iter()
-            .map(|(name, input)| (*name, sanitize(input.to_string())))
-            .collect::<Vec<_>>();
-
-        let result = crate::changelog::process_unreleased_strings(
-            inputs_sanitized.as_slice(),
-            OUTPUT_ORIGINAL,
+    fn empty_frontmatter() {
+        let workspace_mocker = example_workspace_1().unwrap();
+        let changelog = CrateChangelog::try_from_path(
+            &workspace_mocker.root().join("crates/crate_a/CHANGELOG.md"),
         )
         .unwrap();
+        let fm: Result<Option<Frontmatter>, String> =
+            changelog.front_matter().map_err(|e| e.to_string());
 
-        let output_final_expected_sanitized = sanitize(OUTPUT_FINAL_EXPECTED.to_string());
+        assert_eq!(Ok(Some(Frontmatter::default())), fm);
+    }
+
+    #[test]
+    fn no_frontmatter() {
+        let workspace_mocker = example_workspace_1().unwrap();
+        let changelog = CrateChangelog::try_from_path(
+            &workspace_mocker.root().join("crates/crate_b/CHANGELOG.md"),
+        )
+        .unwrap();
+        let fm: Result<Option<Frontmatter>, String> =
+            changelog.front_matter().map_err(|e| e.to_string());
+
+        assert_eq!(Ok(None), fm);
+    }
+
+    #[test]
+    fn nonempty_frontmatter() {
+        let workspace_mocker = example_workspace_1().unwrap();
+        let changelog = CrateChangelog::try_from_path(
+            &workspace_mocker.root().join("crates/crate_c/CHANGELOG.md"),
+        )
+        .unwrap();
+        let fm: Result<Option<Frontmatter>, String> =
+            changelog.front_matter().map_err(|e| e.to_string());
 
         assert_eq!(
-            result,
-            output_final_expected_sanitized,
-            "{}",
-            prettydiff::text::diff_lines(&result, &output_final_expected_sanitized).format()
+            Ok(Some(Frontmatter {
+                unreleasable: Some(true),
+                default_unreleasable: Some(true),
+            })),
+            fm
         );
     }
 
     #[test]
-    fn changelog_aggregation_files() {
-        // todo: integrate this with workspace_mocker
+    fn changelog_aggregation() {
+        let workspace_mocker = example_workspace_1().unwrap();
+
         let inputs: &[(&str, PathBuf)] = &[
             (
-                "holochain_zome_types",
-                PathBuf::from(concat!(
-                    env!("CARGO_MANIFEST_DIR"),
-                    "/src/tests/fixtures/example_workspace/crates/holochain_zome_types/CHANGELOG.md"
-                )),
+                "crate_a",
+                workspace_mocker.root().join("crates/crate_a/CHANGELOG.md"),
             ),
             (
-                "holochain",
-                PathBuf::from(concat!(
-                    env!("CARGO_MANIFEST_DIR"),
-                    "/src/tests/fixtures/example_workspace/crates/holochain/CHANGELOG.md"
-                )),
+                "crate_b",
+                workspace_mocker.root().join("crates/crate_b/CHANGELOG.md"),
             ),
+            // (
+            //     "crate_c",
+            //     workspace_mocker.root().join("crates/crate_c/CHANGELOG.md"),
+            // ),
         ];
+        let output_original = workspace_mocker.root().join("CHANGELOG.md");
 
-        // todo: integrate this with workspace_mocker
-        let output_original = {
-            let fixture = PathBuf::from(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/src/tests/fixtures/example_workspace/CHANGELOG.md"
-            ));
+        const OUTPUT_FINAL_EXPECTED: &str = indoc::indoc!(
+            r#"
+            # Changelog
+            This file conveniently consolidates all of the crates individual CHANGELOG.md files and groups them by timestamps at which crates were released.
+            The file is updated every time one or more crates are released.
 
-            let tmpfile = tempfile::NamedTempFile::new().unwrap();
-            std::fs::copy(fixture, &tmpfile).unwrap();
+            The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+            This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-            tmpfile
-        };
+            # [Unreleased]
+            The text beneath this heading will be retained which allows adding overarching release notes.
 
-        // todo: integrate this with workspace_mocker
-        const OUTPUT_FINAL_EXPECTED: &str = include_str!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/src/tests/fixtures/example_workspace/CHANGELOG_expected.md"
-        ));
+            ## [crate_a](crates/crate_a/CHANGELOG.md#unreleased)
 
-        crate::changelog::process_unreleased(inputs, &output_original.path().to_path_buf())
-            .unwrap();
-        let result = sanitize(std::fs::read_to_string(output_original.path()).unwrap());
+            ### Added
+
+            - `InstallAppBundle` command added to admin conductor API. [#665](https://github.com/holochain/holochain/pull/665)
+            - `DnaSource` in conductor_api `RegisterDna` call now can take a `DnaBundle` [#665](https://github.com/holochain/holochain/pull/665)
+
+            ### Removed
+
+            - BREAKING:  `InstallAppDnaPayload` in admin conductor API `InstallApp` command now only accepts a hash.  Both properties and path have been removed as per deprecation warning.  Use either `RegisterDna` or `InstallAppBundle` instead. [#665](https://github.com/holochain/holochain/pull/665)
+            - BREAKING: `DnaSource(Path)` in conductor_api `RegisterDna` call now must point to `DnaBundle` as created by `hc dna pack` not a `DnaFile` created by `dna_util` [#665](https://github.com/holochain/holochain/pull/665)
+
+            ## [crate_b](crates/crate_b/CHANGELOG.md#unreleased)
+
+            ### Changed
+            - `Signature` is a 64 byte 'secure primitive'
+
+            # [20210304.120604]
+            This will include the hdk-0.0.100 release.
+
+            ## [hdk-0.0.100](crates/hdk/CHANGELOG.md#0.0.100)
+
+            ### Changed
+            - hdk: fixup the autogenerated hdk documentation.
+            "#
+        );
+
+        crate::changelog::process_unreleased(inputs, &output_original).unwrap();
+        let result = sanitize(std::fs::read_to_string(output_original).unwrap());
 
         let output_final_expected_sanitized = sanitize(OUTPUT_FINAL_EXPECTED.to_string());
         assert_eq!(
