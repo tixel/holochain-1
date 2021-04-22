@@ -4,30 +4,29 @@ use crate::tests::workspace_mocker::example_workspace_1;
 
 #[test]
 fn detect_changed_files() {
-    let workspace_path = PathBuf::from(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/src/tests/fixtures/example_workspace"
-    ));
+    let workspace_mocker = example_workspace_1().unwrap();
+    workspace_mocker.add_or_replace_file(
+        "README",
+        r#"# Example
+
+            Some changes
+        "#,
+    );
+    let before = workspace_mocker.head();
+    let after = workspace_mocker.commit(None);
+
+    let workspace = ReleaseWorkspace::try_new(workspace_mocker.root()).unwrap();
 
     assert_eq!(
-        vec![PathBuf::from(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/src/tests/fixtures/example_workspace/crates/holochain/CHANGELOG.md"
-        ))],
-        changed_files(
-            &workspace_path,
-            "4470117bfe54bdfadbf4d8a563fd7125742ef9a5",
-            "68a31e72d67043acd2037d54396b7eb56ba6ba2e"
-        )
-        .unwrap()
+        vec![PathBuf::from(&workspace.root().unwrap()).join("README")],
+        changed_files(&workspace.root().unwrap(), &before, &after).unwrap()
     );
 }
 
 #[test]
 fn workspace_members() {
     let workspace_mocker = example_workspace_1().unwrap();
-    let project = workspace_mocker.project_builder.build();
-    let workspace = ReleaseWorkspace::try_new(project.root()).unwrap();
+    let workspace = ReleaseWorkspace::try_new(workspace_mocker.root()).unwrap();
 
     let result = workspace
         .members()
@@ -47,12 +46,7 @@ fn workspace_members() {
 #[test]
 fn releasable_crates() {
     let workspace_mocker = example_workspace_1().unwrap();
-    let project = workspace_mocker.project_builder.build();
-    let workspace = ReleaseWorkspace::try_new(project.root()).unwrap();
-
-    // eprintln!("created workspace {:#?}", workspace);
-    // std::thread::sleep(std::time::Duration::new(30, 0));
-    // workspace.cargo_workspace().unwrap();
+    let workspace = ReleaseWorkspace::try_new(workspace_mocker.root()).unwrap();
 
     let members = workspace.members().unwrap();
 
@@ -76,8 +70,7 @@ fn releasable_crates() {
 #[test]
 fn final_selection() {
     let workspace_mocker = example_workspace_1().unwrap();
-    let project = workspace_mocker.project_builder.build();
-    let workspace = ReleaseWorkspace::try_new(project.root()).unwrap();
+    let workspace = ReleaseWorkspace::try_new(workspace_mocker.root()).unwrap();
 
     let selection = workspace
         .final_selection()

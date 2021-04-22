@@ -24,3 +24,4 @@ educe = "0.4"
 prettydiff = "0.4"
 tempfile = "3"
 cargo-test-support = { git = "https://github.com/rust-lang/cargo", branch = "rust-1.52.0" }
+git2 = "0.13"

@@ -1,36 +1,51 @@
 use crate::*;
 
-use cargo_test_support::ProjectBuilder;
+use cargo_test_support::git::{self, Repository};
+use cargo_test_support::{Project, ProjectBuilder};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tempfile;
 
-pub(crate) enum ProjectType {
+pub(crate) enum MockProjectType {
     Lib,
     Bin,
 }
 
-pub(crate) struct Project {
+pub(crate) struct MockProject {
     pub(crate) name: String,
     pub(crate) version: String,
     pub(crate) dependencies: Vec<String>,
     pub(crate) excluded: bool,
-    pub(crate) ty: ProjectType,
+    pub(crate) ty: MockProjectType,
     pub(crate) changelog: Option<String>,
 }
 
 pub(crate) struct WorkspaceMocker {
-    pub(crate) dir: tempfile::TempDir,
-    pub(crate) project_builder: ProjectBuilder,
-    pub(crate) projects: HashMap<String, Project>,
+    pub(crate) dir: Option<tempfile::TempDir>,
+    pub(crate) projects: HashMap<String, MockProject>,
+    pub(crate) workspace_project: Project,
+    pub(crate) workspace_repo: git2::Repository,
 }
 
 impl WorkspaceMocker {
     pub(crate) fn try_new(
         toplevel_changelog: Option<&str>,
-        projects: Vec<Project>,
+        projects: Vec<MockProject>,
     ) -> Fallible<Self> {
-        let dir = tempfile::tempdir()?;
+        let (path, dir) = {
+            let dir = tempfile::tempdir()?;
+            if std::option_env!("KEEP_MOCK_WORKSPACE")
+                .map(str::parse::<bool>)
+                .map(Result::ok)
+                .flatten()
+                .unwrap_or_default()
+            {
+                eprintln!("keeping {:?}", dir.path());
+                (dir.into_path(), None)
+            } else {
+                (dir.path().to_path_buf(), Some(dir))
+            }
+        };
 
         let projects = projects
             .into_iter()
@@ -50,7 +65,7 @@ impl WorkspaceMocker {
             }
         });
 
-        let project_builder = ProjectBuilder::new(dir.path().to_path_buf()).file(
+        let project_builder = ProjectBuilder::new(path).file(
             "Cargo.toml",
             &format!(
                 r#"
@@ -74,7 +89,7 @@ impl WorkspaceMocker {
             projects
                 .iter()
                 .fold(project_builder, |project_builder, (name, project)| {
-                    use ProjectType::{Bin, Lib};
+                    use MockProjectType::{Bin, Lib};
 
                     let dependencies = project
                         .dependencies
@@ -121,25 +136,53 @@ impl WorkspaceMocker {
                     }
                 });
 
-        // todo: initialize git repository
+        let workspace_project = project_builder.build();
 
-        Ok(Self {
+        let workspace_mocker = Self {
             dir,
-            project_builder,
             projects,
-        })
+            workspace_repo: git::init(&workspace_project.root()),
+            workspace_project,
+        };
+
+        workspace_mocker.commit(None);
+
+        Ok(workspace_mocker)
     }
 
-    pub(crate) fn path(&self) -> std::path::PathBuf {
-        self.dir.path().to_owned()
+    pub(crate) fn root(&self) -> std::path::PathBuf {
+        self.workspace_project.root()
+    }
+
+    pub(crate) fn add_or_replace_file(&self, path: &str, content: &str) {
+        self.workspace_project.change_file(path, content);
+    }
+
+    pub(crate) fn commit(&self, tag: Option<&str>) -> String {
+        git::add(&self.workspace_repo);
+        let commit = git::commit(&self.workspace_repo).to_string();
+
+        if let Some(tag) = tag {
+            git::tag(&self.workspace_repo, &tag);
+        }
+
+        commit
+    }
+
+    pub(crate) fn head(&self) -> String {
+        self.workspace_repo
+            .revparse_single("HEAD")
+            .expect("revparse HEAD")
+            .id()
+            .to_string()
     }
 }
 
 pub(crate) fn example_workspace_1<'a>() -> Fallible<WorkspaceMocker> {
-    use crate::tests::workspace_mocker::{self, Project, WorkspaceMocker};
+    use crate::tests::workspace_mocker::{self, MockProject, WorkspaceMocker};
 
     let members = vec![
-        Project {
+        MockProject {
             name: "crate_a".to_string(),
             version: "0.0.1".to_string(),
             dependencies: vec![
@@ -147,7 +190,7 @@ pub(crate) fn example_workspace_1<'a>() -> Fallible<WorkspaceMocker> {
                 r#"crate_c = { path = "../crate_c", version = "0.0.1" }"#.to_string(),
             ],
             excluded: false,
-            ty: workspace_mocker::ProjectType::Bin,
+            ty: workspace_mocker::MockProjectType::Bin,
             changelog: Some(
                 r#"
             ---
@@ -160,12 +203,12 @@ pub(crate) fn example_workspace_1<'a>() -> Fallible<WorkspaceMocker> {
                 .to_string(),
             ),
         },
-        Project {
+        MockProject {
             name: "crate_b".to_string(),
             version: "0.0.1".to_string(),
             dependencies: vec![],
             excluded: false,
-            ty: workspace_mocker::ProjectType::Lib,
+            ty: workspace_mocker::MockProjectType::Lib,
             changelog: Some(
                 r#"
             ---
@@ -178,12 +221,12 @@ pub(crate) fn example_workspace_1<'a>() -> Fallible<WorkspaceMocker> {
                 .to_string(),
             ),
         },
-        Project {
+        MockProject {
             name: "crate_c".to_string(),
             version: "0.0.1".to_string(),
             dependencies: vec![],
             excluded: false,
-            ty: workspace_mocker::ProjectType::Lib,
+            ty: workspace_mocker::MockProjectType::Lib,
             changelog: Some(
                 r#"---
 unreleasable: true
@@ -197,12 +240,12 @@ Awesome changes!
                 .to_string(),
             ),
         },
-        Project {
+        MockProject {
             name: "crate_d".to_string(),
             version: "0.0.1".to_string(),
             dependencies: vec![],
             excluded: true,
-            ty: workspace_mocker::ProjectType::Bin,
+            ty: workspace_mocker::MockProjectType::Bin,
             changelog: None,
         },
     ];
@@ -219,4 +262,26 @@ Awesome changes!
         ),
         members,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn example() {
+        let workspace_mocker = example_workspace_1().unwrap();
+        workspace_mocker.add_or_replace_file(
+            "README",
+            r#"# Example
+
+                Some changes
+            "#,
+        );
+        let before = workspace_mocker.head();
+        let after = workspace_mocker.commit(None);
+
+        assert_ne!(before, after);
+        assert_eq!(after, workspace_mocker.head());
+    }
 }

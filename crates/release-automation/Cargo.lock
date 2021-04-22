@@ -1336,6 +1336,7 @@ dependencies = [
  "cargo-test-support",
  "comrak",
  "educe",
+ "git2",
  "once_cell",
  "prettydiff",
  "pulldown-cmark",

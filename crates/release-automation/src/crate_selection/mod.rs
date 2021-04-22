@@ -160,6 +160,10 @@ impl<'a> ReleaseWorkspace<'a> {
             Ok(crates)
         })
     }
+
+    pub(crate) fn root(&'a self) -> Fallible<&Path> {
+        Ok(self.cargo_workspace()?.root())
+    }
 }
 
 /// Filters the result of `Self::members` by crates that don't have `unreleasable = true` in their CHANGELOG.md front matter.
