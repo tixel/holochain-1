@@ -37,6 +37,12 @@ dependencies = [
 
 [[package]]
 name = "ahash"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "739f4a8db6605981345c5654f3a85b056ce52f37a39d34da03f25bf2151ea16e"
+
+[[package]]
+name = "ahash"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "796540673305a66d127804eef19ad696f1f204b8c1025aaca4958c17eab32877"
@@ -78,6 +84,15 @@ name = "anyhow"
 version = "1.0.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28b2cd92db5cbd74e8e5028f7e27dd7aa3090e89e4f2a197cc7c8dfb69c7063b"
+
+[[package]]
+name = "arbitrary"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "698b65a961a9d730fb45b6b0327e20207810c9f61ee421b082b27ba003f49e2b"
+dependencies = [
+ "derive_arbitrary",
+]
 
 [[package]]
 name = "arrayref"
@@ -858,6 +873,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "derive_arbitrary"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df89dd0d075dea5cc5fdd6d5df6b8a61172a710b3efac1d6bdb9dd8b78f82c1a"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "derive_builder"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1456,6 +1482,9 @@ name = "hashbrown"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7afe4a420e3fe79967a00898cc1f4db7c8a49a9333a29f8a4bd76a253d5cd04"
+dependencies = [
+ "ahash 0.4.7",
+]
 
 [[package]]
 name = "hdk"
@@ -1515,6 +1544,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 name = "holo_hash"
 version = "0.0.2-alpha.1"
 dependencies = [
+ "arbitrary",
  "base64",
  "blake2b_simd",
  "derive_more",
@@ -1582,6 +1612,7 @@ dependencies = [
  "pretty_assertions",
  "rand 0.7.3",
  "ring",
+ "sd-notify",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -1871,6 +1902,7 @@ name = "holochain_types"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "arbitrary",
  "async-trait",
  "automap",
  "backtrace",
@@ -2307,6 +2339,7 @@ version = "0.0.1"
 dependencies = [
  "base64",
  "blake2b_simd",
+ "criterion",
  "derive_more",
  "futures",
  "kitsune_p2p_transport_quic",
@@ -2314,6 +2347,7 @@ dependencies = [
  "lair_keystore_api",
  "nanoid",
  "observability",
+ "parking_lot 0.11.1",
  "rmp-serde",
  "rustls",
  "serde",
@@ -2328,6 +2362,7 @@ dependencies = [
 name = "kitsune_p2p_transport_quic"
 version = "0.0.1"
 dependencies = [
+ "blake2b_simd",
  "futures",
  "if-addrs",
  "kitsune_p2p_types",
@@ -2346,16 +2381,21 @@ dependencies = [
 name = "kitsune_p2p_types"
 version = "0.0.1"
 dependencies = [
+ "criterion",
  "derive_more",
  "futures",
  "ghost_actor 0.3.0-alpha.1",
+ "lair_keystore_api",
+ "lru",
  "nanoid",
  "observability",
  "once_cell",
  "parking_lot 0.11.1",
  "paste 1.0.3",
  "rmp-serde",
+ "rustls",
  "serde",
+ "serde_bytes",
  "serde_json",
  "sysinfo",
  "thiserror",
@@ -2364,6 +2404,7 @@ dependencies = [
  "tracing-subscriber",
  "url 2.2.1",
  "url2",
+ "webpki",
 ]
 
 [[package]]
@@ -2509,6 +2550,15 @@ checksum = "51b9bbe6c47d51fc3e1a9b945965946b4c44142ab8792c50835a980d362c2710"
 dependencies = [
  "cfg-if 1.0.0",
  "value-bag",
+]
+
+[[package]]
+name = "lru"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f374d42cdfc1d7dbf3d3dec28afab2eb97ffbf43a3234d795b5986dbf4b90ba"
+dependencies = [
+ "hashbrown",
 ]
 
 [[package]]
@@ -2698,6 +2748,7 @@ name = "mr_bundle"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "arbitrary",
  "bytes",
  "derive_more",
  "either",
@@ -3955,6 +4006,12 @@ dependencies = [
  "ring",
  "untrusted",
 ]
+
+[[package]]
+name = "sd-notify"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0cd08a21f852bd2fe42e3b2a6c76a0db6a95a5b5bd29c0521dd0b30fa1712ec8"
 
 [[package]]
 name = "security-framework"
