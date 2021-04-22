@@ -1,6 +1,0 @@
-[package]
-name = "holochain_zome_types-fixture"
-version = "0.0.1"
-
-[dependencies]
-anyhow = "1"

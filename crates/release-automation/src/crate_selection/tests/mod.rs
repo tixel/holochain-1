@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::tests::workspace_mocker::example_workspace_1;
+
 #[test]
 fn detect_changed_files() {
     let workspace_path = PathBuf::from(concat!(
@@ -23,12 +25,9 @@ fn detect_changed_files() {
 
 #[test]
 fn workspace_members() {
-    // let changed_files = changed_files(&workspace_path, "HEAD", "HEAD");
-    let workspace = ReleaseWorkspace::try_new(PathBuf::from(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/src/tests/fixtures/example_workspace"
-    )))
-    .unwrap();
+    let workspace_mocker = example_workspace_1().unwrap();
+    let project = workspace_mocker.project_builder.build();
+    let workspace = ReleaseWorkspace::try_new(project.root()).unwrap();
 
     let result = workspace
         .members()
@@ -37,25 +36,23 @@ fn workspace_members() {
         .map(|crt| crt.name().to_owned())
         .collect::<Vec<_>>();
 
-    let expected_result = [
-        "holochain-fixture",
-        "holochain_zome_types-fixture",
-        "unreleasable",
-    ]
-    .iter()
-    .map(std::string::ToString::to_string)
-    .collect::<Vec<_>>();
+    let expected_result = ["crate_a", "crate_b", "crate_c"]
+        .iter()
+        .map(std::string::ToString::to_string)
+        .collect::<Vec<_>>();
 
     assert_eq!(expected_result, result);
 }
 
 #[test]
 fn releasable_crates() {
-    let workspace = ReleaseWorkspace::try_new(PathBuf::from(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/src/tests/fixtures/example_workspace"
-    )))
-    .unwrap();
+    let workspace_mocker = example_workspace_1().unwrap();
+    let project = workspace_mocker.project_builder.build();
+    let workspace = ReleaseWorkspace::try_new(project.root()).unwrap();
+
+    // eprintln!("created workspace {:#?}", workspace);
+    // std::thread::sleep(std::time::Duration::new(30, 0));
+    // workspace.cargo_workspace().unwrap();
 
     let members = workspace.members().unwrap();
 
@@ -68,13 +65,9 @@ fn releasable_crates() {
         })
         .collect::<Vec<_>>();
 
-    let expected_result = ["holochain-fixture", "holochain_zome_types-fixture"]
+    let expected_result = ["crate_a", "crate_b"]
         .iter()
         .map(std::string::ToString::to_string)
-        // .map(|name| Crate {
-        //     name,
-        //     ..Default::default()
-        // })
         .collect::<Vec<_>>();
 
     assert_eq!(expected_result, result);
@@ -82,14 +75,17 @@ fn releasable_crates() {
 
 #[test]
 fn final_selection() {
-    // todo: construct and assert a test case
-    // let workspace_mocker = crate::tests::workspace_mocker::WorkspaceMocker::try_new().unwrap();
+    let workspace_mocker = example_workspace_1().unwrap();
+    let project = workspace_mocker.project_builder.build();
+    let workspace = ReleaseWorkspace::try_new(project.root()).unwrap();
 
-    let workspace = ReleaseWorkspace::try_new(PathBuf::from(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/src/tests/fixtures/example_workspace"
-    )))
-    .unwrap();
+    let selection = workspace
+        .final_selection()
+        .unwrap()
+        .into_iter()
+        .map(|c| c.name())
+        .collect::<Vec<_>>();
+    let expected_selection = vec!["crate_a", "crate_b"];
 
-    workspace.final_selection().unwrap();
+    assert_eq!(expected_selection, selection);
 }

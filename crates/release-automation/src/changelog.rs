@@ -5,12 +5,11 @@ use comrak::{format_commonmark, parse_document, Arena, ComrakOptions};
 use once_cell::unsync::OnceCell;
 use semver::Version;
 use serde::Deserialize;
-use smart_default::SmartDefault;
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
-#[derive(Debug, PartialEq, Deserialize, SmartDefault)]
+#[derive(Debug, PartialEq, Deserialize)]
 pub(crate) struct Frontmatter {
     unreleasable: Option<bool>,
 
@@ -42,6 +41,17 @@ pub(crate) struct CrateChangelog<'a> {
     path: PathBuf,
     arena: Arena<AstNode<'a>>,
     root: OnceCell<&'a comrak::arena_tree::Node<'a, RefCell<Ast>>>,
+}
+
+impl std::fmt::Debug for CrateChangelog<'_> {
+    fn fmt(
+        &self,
+        formatter: &mut std::fmt::Formatter<'_>,
+    ) -> std::result::Result<(), std::fmt::Error> {
+        write!(formatter, "CrateChangelog {{ path: {:?} }}", self.path)?;
+
+        Ok(())
+    }
 }
 
 impl<'a> CrateChangelog<'a> {
@@ -407,6 +417,7 @@ mod test {
             default_unreleasable: Some(true),
         };
 
+        // todo: integrate this with workspace_mocker
         let path = PathBuf::from(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/src/tests/fixtures/example_workspace/crates/unreleasable/CHANGELOG.md"
@@ -422,6 +433,7 @@ mod test {
 
     #[test]
     fn changelog_aggregation_strings() {
+        // todo: integrate this with workspace_mocker
         const INPUTS: &[(&str, &str)] = &[
             (
                 "holochain_zome_types",
@@ -439,11 +451,13 @@ mod test {
             ),
         ];
 
+        // todo: integrate this with workspace_mocker
         const OUTPUT_ORIGINAL: &str = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/src/tests/fixtures/example_workspace/CHANGELOG.md"
         ));
 
+        // todo: integrate this with workspace_mocker
         const OUTPUT_FINAL_EXPECTED: &str = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/src/tests/fixtures/example_workspace/CHANGELOG_expected.md"
@@ -472,6 +486,7 @@ mod test {
 
     #[test]
     fn changelog_aggregation_files() {
+        // todo: integrate this with workspace_mocker
         let inputs: &[(&str, PathBuf)] = &[
             (
                 "holochain_zome_types",
@@ -489,6 +504,7 @@ mod test {
             ),
         ];
 
+        // todo: integrate this with workspace_mocker
         let output_original = {
             let fixture = PathBuf::from(concat!(
                 env!("CARGO_MANIFEST_DIR"),
@@ -501,6 +517,7 @@ mod test {
             tmpfile
         };
 
+        // todo: integrate this with workspace_mocker
         const OUTPUT_FINAL_EXPECTED: &str = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/src/tests/fixtures/example_workspace/CHANGELOG_expected.md"

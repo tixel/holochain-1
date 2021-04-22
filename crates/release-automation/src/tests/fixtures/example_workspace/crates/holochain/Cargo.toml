@@ -1,6 +1,0 @@
-[package]
-name = "holochain-fixture"
-version = "0.0.100"
-
-[dependencies]
-holochain_zome_types = { path = "../holochain_zome_types" }

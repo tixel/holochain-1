@@ -157,10 +157,10 @@ dependencies = [
  "anyhow",
  "atty",
  "bytesize",
- "cargo-platform",
+ "cargo-platform 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap",
  "core-foundation",
- "crates-io",
+ "crates-io 0.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "crossbeam-utils",
  "crypto-hash",
  "curl",
@@ -209,12 +209,104 @@ dependencies = [
 ]
 
 [[package]]
+name = "cargo"
+version = "0.53.0"
+source = "git+https://github.com/rust-lang/cargo?branch=rust-1.52.0#69767412acbf7f64773427b1fb53e45296712c3c"
+dependencies = [
+ "anyhow",
+ "atty",
+ "bytesize",
+ "cargo-platform 0.1.1 (git+https://github.com/rust-lang/cargo?branch=rust-1.52.0)",
+ "clap",
+ "core-foundation",
+ "crates-io 0.33.0 (git+https://github.com/rust-lang/cargo?branch=rust-1.52.0)",
+ "crossbeam-utils",
+ "crypto-hash",
+ "curl",
+ "curl-sys",
+ "env_logger",
+ "filetime",
+ "flate2",
+ "fwdansi",
+ "git2",
+ "git2-curl",
+ "glob",
+ "hex 0.4.3",
+ "home",
+ "humantime",
+ "ignore",
+ "im-rc",
+ "jobserver",
+ "lazy_static",
+ "lazycell",
+ "libc",
+ "libgit2-sys",
+ "log",
+ "memchr",
+ "miow",
+ "num_cpus",
+ "opener",
+ "percent-encoding",
+ "rand",
+ "rustc-workspace-hack",
+ "rustfix",
+ "same-file",
+ "semver 0.10.0",
+ "serde",
+ "serde_ignored",
+ "serde_json",
+ "shell-escape",
+ "strip-ansi-escapes",
+ "tar",
+ "tempfile",
+ "termcolor",
+ "toml",
+ "unicode-width",
+ "unicode-xid 0.2.1",
+ "url",
+ "walkdir",
+ "winapi",
+]
+
+[[package]]
 name = "cargo-platform"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0226944a63d1bf35a3b5f948dd7c59e263db83695c9e8bffc4037de02e30f1d7"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "cargo-platform"
+version = "0.1.1"
+source = "git+https://github.com/rust-lang/cargo?branch=rust-1.52.0#69767412acbf7f64773427b1fb53e45296712c3c"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "cargo-test-macro"
+version = "0.1.0"
+source = "git+https://github.com/rust-lang/cargo?branch=rust-1.52.0#69767412acbf7f64773427b1fb53e45296712c3c"
+
+[[package]]
+name = "cargo-test-support"
+version = "0.1.0"
+source = "git+https://github.com/rust-lang/cargo?branch=rust-1.52.0#69767412acbf7f64773427b1fb53e45296712c3c"
+dependencies = [
+ "cargo 0.53.0",
+ "cargo-test-macro",
+ "filetime",
+ "flate2",
+ "git2",
+ "glob",
+ "lazy_static",
+ "remove_dir_all",
+ "serde_json",
+ "tar",
+ "toml",
+ "url",
 ]
 
 [[package]]
@@ -311,6 +403,19 @@ name = "crates-io"
 version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "217138863f33507d7a8edef10fc673c4911679ef7aeb9ff53ee7bb82dc7bf590"
+dependencies = [
+ "anyhow",
+ "curl",
+ "percent-encoding",
+ "serde",
+ "serde_json",
+ "url",
+]
+
+[[package]]
+name = "crates-io"
+version = "0.33.0"
+source = "git+https://github.com/rust-lang/cargo?branch=rust-1.52.0#69767412acbf7f64773427b1fb53e45296712c3c"
 dependencies = [
  "anyhow",
  "curl",
@@ -432,6 +537,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56899898ce76aaf4a0f24d914c97ea6ed976d42fec6ad33fcbb0a1103e07b2b0"
 
 [[package]]
+name = "educe"
+version = "0.4.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e594b695c39af9c4e9b4177b408d93f2a010888abe8789bf21defe55d2f4b4e"
+dependencies = [
+ "enum-ordinalize",
+ "proc-macro2 1.0.24",
+ "quote 1.0.9",
+ "syn 1.0.67",
+]
+
+[[package]]
 name = "encode_unicode"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -442,6 +559,19 @@ name = "entities"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5320ae4c3782150d900b79807611a59a99fc9a1d61d686faafc24b93fc8d7ca"
+
+[[package]]
+name = "enum-ordinalize"
+version = "3.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b166c9e378360dd5a6666a9604bb4f54ae0cac39023ffbac425e917a2a04fef"
+dependencies = [
+ "num-bigint",
+ "num-traits",
+ "proc-macro2 1.0.24",
+ "quote 1.0.9",
+ "syn 1.0.67",
+]
 
 [[package]]
 name = "env_logger"
@@ -838,6 +968,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "num-bigint"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e0d047c1062aa51e256408c560894e5251f08925980e53cf1aa5bd00eec6512"
+dependencies = [
+ "autocfg",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
+name = "num-integer"
+version = "0.1.44"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2cc698a63b549a70bc047073d2949cce27cd1c7b0a4a862d08a8031bc2801db"
+dependencies = [
+ "autocfg",
+ "num-traits",
+]
+
+[[package]]
+name = "num-traits"
+version = "0.2.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a64b1ec5cda2586e284722486d802acf1f7dbdc623e2bfc57e65ca1cd099290"
+dependencies = [
+ "autocfg",
+]
+
+[[package]]
 name = "num_cpus"
 version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1172,15 +1332,16 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bstr",
- "cargo",
+ "cargo 0.52.0",
+ "cargo-test-support",
  "comrak",
+ "educe",
  "once_cell",
  "prettydiff",
  "pulldown-cmark",
  "semver 0.11.0",
  "serde",
  "serde_yaml",
- "smart-default",
  "structopt 0.3.21",
  "tempfile",
  "yaml-rust",
@@ -1368,17 +1529,6 @@ checksum = "65e65d6a9f13cd78f361ea5a2cf53a45d67cdda421ba0316b9be101560f3d207"
 dependencies = [
  "bitmaps",
  "typenum",
-]
-
-[[package]]
-name = "smart-default"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "133659a15339456eeeb07572eb02a91c91e9815e9cbc89566944d2c8d3efdbf6"
-dependencies = [
- "proc-macro2 1.0.24",
- "quote 1.0.9",
- "syn 1.0.67",
 ]
 
 [[package]]

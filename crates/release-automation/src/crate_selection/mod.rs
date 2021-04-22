@@ -16,6 +16,7 @@ mod aliases {
 }
 use aliases::*;
 
+#[derive(Debug)]
 struct Crate<'a> {
     package: CargoPackage,
     changelog: Option<CrateChangelog<'a>>,
@@ -61,6 +62,25 @@ struct ReleaseWorkspace<'a> {
     crates: OnceCell<Vec<Crate<'a>>>,
 }
 
+impl std::fmt::Debug for ReleaseWorkspace<'_> {
+    fn fmt(&self, fmter: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        write!(
+            fmter,
+            r#"ReleaseWorkspace {{
+    root_path: {:?},
+    cargo_config: <omitted>
+    cargo_workspace: {:#?}
+    crates: {:#?}
+}}"#,
+            self.root_path,
+            self.cargo_workspace.get(),
+            self.crates.get()
+        )?;
+
+        Ok(())
+    }
+}
+
 impl<'a> ReleaseWorkspace<'a> {
     pub fn try_new(root_path: PathBuf) -> Fallible<ReleaseWorkspace<'a>> {
         let new = Self {
@@ -86,6 +106,10 @@ impl<'a> ReleaseWorkspace<'a> {
     /// Returns the crates that are going to be processed for release.
     pub(crate) fn final_selection(&'a self) -> Fallible<Vec<&'a Crate>> {
         let members = self.members()?;
+        println!(
+            "all members: {:#?}",
+            members.iter().map(|m| m.name()).collect::<Vec<_>>()
+        );
 
         let changed = changed_crates(members)?;
         let releasable = releasable_crates(members)?;

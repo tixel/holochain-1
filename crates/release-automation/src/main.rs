@@ -1,6 +1,9 @@
 #![allow(unused_imports)]
 #![allow(dead_code)]
 
+// #[macro_use]
+// extern crate educe;
+
 use comrak::{format_commonmark, parse_document, Arena, ComrakOptions};
 
 pub(crate) mod changelog;
