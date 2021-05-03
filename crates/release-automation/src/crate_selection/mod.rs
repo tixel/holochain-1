@@ -1,6 +1,6 @@
 //! Select which crates to include in the release process.
 
-use crate::changelog::CrateChangelog;
+use crate::changelog::{self, CrateChangelog};
 use crate::Fallible;
 
 use anyhow::{anyhow, bail};
@@ -52,6 +52,10 @@ impl<'a> Crate<'a> {
     /// Returns the crates in the same workspace that this crate depends on.
     pub(crate) fn dependencies_in_workspace(&'a self) -> Fallible<&Crate<'a>> {
         todo!("")
+    }
+
+    pub(crate) fn root(&self) -> &Path {
+        self.package.root()
     }
 }
 
@@ -213,31 +217,39 @@ where
     let mut changed = BTreeSet::new();
 
     for (index, candidate) in crates.into_iter().enumerate() {
-        let previous_release: Option<&str> = {
-            // todo: determine the last release for each crate according to the changelog
-            Some("todo")
-            // None
-        };
+        let previous_release = candidate
+            .changelog()
+            .map(changelog::CrateChangelog::releases)
+            .map(Result::ok)
+            .flatten()
+            .iter()
+            .flatten()
+            .filter_map(|r| {
+                if let changelog::WorkspaceRelease::Release(heading) = r {
+                    Some(heading.title.clone())
+                } else {
+                    None
+                }
+            })
+            .take(1)
+            .next();
 
-        println!(
-            "[{}] previous release: {:?}",
-            candidate.name(),
-            previous_release
-        );
+        let git_tag = if let Some(ref previous_release) = previous_release {
+            let git_repo = git2::Repository::open(candidate.root())?;
 
-        let git_tag = if let Some(previous_release) = previous_release {
-            let git_tag =
-                // todo: determine the git tag for the previous release
-                // todo: warn or fail if it's not present?
-                previous_release;
-
-            Some(git_tag)
+            // lookup the git tag for the previous release
+            git_repo
+                .find_tag(git2::Oid::from_str(&previous_release)?)
+                .map(
+                    // todo: double-check the tag name?
+                    |_| Some(previous_release),
+                )?
         } else {
             None
         };
 
         let change_indicator = if let Some(git_tag) = git_tag {
-            let changed_files = changed_files(candidate.package.root(), git_tag, "HEAD")?;
+            let changed_files = changed_files(candidate.package.root(), &git_tag, "HEAD")?;
 
             if changed_files.len() > 0 {
                 Some(true)
@@ -247,6 +259,14 @@ where
         } else {
             None
         };
+
+        println!(
+            "[{}] previous release: {:?}, git tag: {:?}, change_indicator: {:?}",
+            candidate.name(),
+            previous_release,
+            git_tag,
+            change_indicator,
+        );
 
         if let Some(true) = change_indicator {
             changed.insert(index);

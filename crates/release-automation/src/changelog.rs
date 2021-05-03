@@ -25,10 +25,9 @@ impl Frontmatter {
 #[derive(Debug, PartialEq)]
 pub(crate) struct WorkspaceChangelog {}
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Default)]
 pub(crate) struct WorkspaceReleaseHeading {
-    time: SystemTime,
-    crates: String,
+    pub(crate) title: String,
 }
 
 #[derive(Debug, PartialEq)]
@@ -116,7 +115,9 @@ impl<'a> CrateChangelog<'a> {
 
     /// Find a list of releases for this crate.
     pub(crate) fn releases(&self) -> Fallible<Vec<WorkspaceRelease>> {
-        todo!("")
+        Ok(vec![WorkspaceRelease::Release(WorkspaceReleaseHeading {
+            title: "todo".to_string(),
+        })])
     }
 
     fn root(&'a self) -> Fallible<&&'a comrak::arena_tree::Node<'a, RefCell<Ast>>> {
@@ -398,9 +399,7 @@ fn process_unreleased_strings(
                     if let Some(content_topmost_release) = content_topmost_release {
                         !node.same_node(content_topmost_release)
                     } else {
-                        // todo: handle the case where no previous release was found
-
-                        true
+                        todo!("handle the case where no previous release was found");
                     }
                 })
                 .inspect(|node| {
@@ -537,5 +536,46 @@ mod tests {
             "{}",
             prettydiff::text::diff_lines(&result, &output_final_expected_sanitized).format()
         );
+    }
+
+    #[test]
+    fn find_existing_releases() -> () {
+        let workspace_mocker = example_workspace_1().unwrap();
+
+        let inputs: &[(&str, PathBuf, Vec<WorkspaceRelease>)] = &[
+            (
+                "crate_a",
+                workspace_mocker.root().join("crates/crate_a/CHANGELOG.md"),
+                vec![
+                    WorkspaceRelease::Unreleased,
+                    WorkspaceRelease::Release(WorkspaceReleaseHeading {
+                        title: "0.0.1".to_string(),
+                    }),
+                ],
+            ),
+            (
+                "crate_b",
+                workspace_mocker.root().join("crates/crate_b/CHANGELOG.md"),
+                vec![
+                    WorkspaceRelease::Unreleased,
+                    WorkspaceRelease::Release(WorkspaceReleaseHeading {
+                        title: "0.0.1-alpha.1".to_string(),
+                    }),
+                ],
+            ),
+            (
+                "crate_c",
+                workspace_mocker.root().join("crates/crate_c/CHANGELOG.md"),
+                vec![],
+            ),
+        ];
+
+        for (name, changelog_path, expected_releases) in inputs {
+            let changelog = CrateChangelog::try_from_path(changelog_path).unwrap();
+
+            let releases = changelog.releases().unwrap();
+
+            assert_eq!(expected_releases, &releases, "{}", name);
+        }
     }
 }

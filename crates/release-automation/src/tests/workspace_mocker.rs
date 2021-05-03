@@ -1,5 +1,6 @@
 use crate::*;
 
+use anyhow::Context;
 use cargo_test_support::git::{self, Repository};
 use cargo_test_support::{Project, ProjectBuilder};
 use std::collections::HashMap;
@@ -165,18 +166,22 @@ impl WorkspaceMocker {
         let commit = git::commit(&self.workspace_repo).to_string();
 
         if let Some(tag) = tag {
-            git::tag(&self.workspace_repo, &tag);
+            let _ = self.tag(tag);
         }
 
         commit
     }
 
-    pub(crate) fn head(&self) -> String {
+    pub(crate) fn tag(&self, tag: &str) -> () {
+        git::tag(&self.workspace_repo, &tag)
+    }
+
+    pub(crate) fn head(&self) -> Fallible<String> {
         self.workspace_repo
             .revparse_single("HEAD")
-            .expect("revparse HEAD")
-            .id()
-            .to_string()
+            .context("revparse HEAD")
+            .map(|o| o.id())
+            .map(|id| id.to_string())
     }
 }
 
@@ -280,7 +285,7 @@ pub(crate) fn example_workspace_1<'a>() -> Fallible<WorkspaceMocker> {
         },
     ];
 
-    WorkspaceMocker::try_new(
+    let workspace_mocker = WorkspaceMocker::try_new(
         Some(indoc::indoc! {r#"
         # Changelog
         This file conveniently consolidates all of the crates individual CHANGELOG.md files and groups them by timestamps at which crates were released.
@@ -310,7 +315,9 @@ pub(crate) fn example_workspace_1<'a>() -> Fallible<WorkspaceMocker> {
         "#
         }),
         members,
-    )
+    )?;
+
+    Ok(workspace_mocker)
 }
 
 #[cfg(test)]
@@ -329,10 +336,10 @@ mod tests {
             "#,
             },
         );
-        let before = workspace_mocker.head();
+        let before = workspace_mocker.head().unwrap();
         let after = workspace_mocker.commit(None);
 
         assert_ne!(before, after);
-        assert_eq!(after, workspace_mocker.head());
+        assert_eq!(after, workspace_mocker.head().unwrap());
     }
 }

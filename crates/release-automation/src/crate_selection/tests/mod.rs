@@ -12,7 +12,7 @@ fn detect_changed_files() {
             Some changes
         "#,
     );
-    let before = workspace_mocker.head();
+    let before = workspace_mocker.head().unwrap();
     let after = workspace_mocker.commit(None);
 
     let workspace = ReleaseWorkspace::try_new(workspace_mocker.root()).unwrap();
@@ -65,6 +65,27 @@ fn releasable_crates() {
         .collect::<Vec<_>>();
 
     assert_eq!(expected_result, result);
+}
+
+#[test]
+fn detect_changed_crates() {
+    let workspace_mocker = example_workspace_1().unwrap();
+    workspace_mocker.add_or_replace_file(
+        "README",
+        r#"# Example
+
+            Some changes
+        "#,
+    );
+    let before = workspace_mocker.head().unwrap();
+    let after = workspace_mocker.commit(None);
+
+    let workspace = ReleaseWorkspace::try_new(workspace_mocker.root()).unwrap();
+
+    assert_eq!(
+        vec![PathBuf::from(&workspace.root().unwrap()).join("README")],
+        changed_files(&workspace.root().unwrap(), &before, &after).unwrap()
+    );
 }
 
 #[test]
