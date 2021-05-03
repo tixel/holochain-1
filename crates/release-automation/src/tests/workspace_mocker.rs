@@ -317,6 +317,30 @@ pub(crate) fn example_workspace_1<'a>() -> Fallible<WorkspaceMocker> {
         members,
     )?;
 
+    workspace_mocker.tag("crate_a-0.0.1");
+    workspace_mocker.add_or_replace_file(
+        "crates/crate_a/README",
+        indoc::indoc! {r#"
+            # Example
+
+            Some changes
+            "#,
+        },
+    );
+    workspace_mocker.commit(None);
+
+    workspace_mocker.tag("crate_b-0.0.1-alpha.1");
+    workspace_mocker.add_or_replace_file(
+        "crates/crate_b/README",
+        indoc::indoc! {r#"
+            # Example
+
+            Some changes
+            "#,
+        },
+    );
+    workspace_mocker.commit(None);
+
     Ok(workspace_mocker)
 }
 
