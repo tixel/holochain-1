@@ -22,6 +22,9 @@ impl Frontmatter {
     }
 }
 
+/// The `WorkspaceChangelog` has further level-1 headings.
+/// With the exception of the potential unreleased heading, all level-1 headings correspond to previous workspace releases.
+/// Within each workspace release the level-2 headings correspond to the crate's that were released together.
 #[derive(Debug, PartialEq)]
 pub(crate) struct WorkspaceChangelog {}
 
@@ -36,10 +39,29 @@ pub(crate) enum WorkspaceRelease {
     Release(WorkspaceReleaseHeading),
 }
 
+impl WorkspaceChangelog {
+    pub(crate) fn releases(&self) -> Fallible<Vec<WorkspaceRelease>> {
+        todo!("")
+    }
+}
+
+/// The `CrateChangelog` only has one level-1 heading, namely `# Changelog`.
+/// With the exception of the potential unreleased heading, all level-2 headings correspond to previous of the crate.
 pub(crate) struct CrateChangelog<'a> {
     path: PathBuf,
     arena: Arena<AstNode<'a>>,
     root: OnceCell<&'a comrak::arena_tree::Node<'a, RefCell<Ast>>>,
+}
+
+#[derive(Debug, PartialEq)]
+pub(crate) enum CrateRelease {
+    Unreleased,
+    Release(CrateReleaseHeading),
+}
+
+#[derive(Debug, PartialEq, Default)]
+pub(crate) struct CrateReleaseHeading {
+    pub(crate) title: String,
 }
 
 impl std::fmt::Debug for CrateChangelog<'_> {
@@ -114,10 +136,51 @@ impl<'a> CrateChangelog<'a> {
     }
 
     /// Find a list of releases for this crate.
-    pub(crate) fn releases(&self) -> Fallible<Vec<WorkspaceRelease>> {
-        Ok(vec![WorkspaceRelease::Release(WorkspaceReleaseHeading {
-            title: "todo".to_string(),
-        })])
+    pub(crate) fn releases(&self) -> Fallible<Vec<CrateRelease>> {
+        let mut options = ComrakOptions::default();
+        options.parse.smart = true;
+        options.extension.front_matter_delimiter = Some("---".to_owned());
+        options.render.hardbreaks = true;
+
+        let arena = Arena::new();
+        let root = parse_document(&arena, &std::fs::read_to_string(&self.path)?, &options);
+
+        let mut releases = vec![];
+
+        for (i, node) in root.children().enumerate() {
+            match &node.data.borrow().value {
+                &NodeValue::Heading(heading) => {
+                    print!("[{}] heading at level {}", i, heading.level);
+
+                    if heading.level != 2 {
+                        continue;
+                    }
+
+                    for (j, node_j) in node.descendants().enumerate().skip(1) {
+                        if let NodeValue::Text(ref text) = &node_j.data.borrow().value {
+                            let text_str = String::from_utf8_lossy(text);
+                            let release = if text_str.to_lowercase().contains("unreleased") {
+                                CrateRelease::Unreleased
+                            } else {
+                                CrateRelease::Release(CrateReleaseHeading {
+                                    title: text_str.to_string(),
+                                })
+                            };
+
+                            print!(
+                                " => [{}] derived release '{:?}' from text '{}'",
+                                j, release, text_str
+                            );
+                            releases.push(release);
+                        }
+                    }
+                    println!("");
+                }
+
+                _ => {}
+            }
+        }
+        Ok(releases)
     }
 
     fn root(&'a self) -> Fallible<&&'a comrak::arena_tree::Node<'a, RefCell<Ast>>> {
@@ -539,16 +602,16 @@ mod tests {
     }
 
     #[test]
-    fn find_existing_releases() -> () {
+    fn find_existing_crate_releases() -> () {
         let workspace_mocker = example_workspace_1().unwrap();
 
-        let inputs: &[(&str, PathBuf, Vec<WorkspaceRelease>)] = &[
+        let inputs: &[(&str, PathBuf, Vec<CrateRelease>)] = &[
             (
                 "crate_a",
                 workspace_mocker.root().join("crates/crate_a/CHANGELOG.md"),
                 vec![
-                    WorkspaceRelease::Unreleased,
-                    WorkspaceRelease::Release(WorkspaceReleaseHeading {
+                    CrateRelease::Unreleased,
+                    CrateRelease::Release(CrateReleaseHeading {
                         title: "0.0.1".to_string(),
                     }),
                 ],
@@ -557,8 +620,8 @@ mod tests {
                 "crate_b",
                 workspace_mocker.root().join("crates/crate_b/CHANGELOG.md"),
                 vec![
-                    WorkspaceRelease::Unreleased,
-                    WorkspaceRelease::Release(WorkspaceReleaseHeading {
+                    CrateRelease::Unreleased,
+                    CrateRelease::Release(CrateReleaseHeading {
                         title: "0.0.1-alpha.1".to_string(),
                     }),
                 ],
@@ -566,7 +629,7 @@ mod tests {
             (
                 "crate_c",
                 workspace_mocker.root().join("crates/crate_c/CHANGELOG.md"),
-                vec![],
+                vec![CrateRelease::Unreleased],
             ),
         ];
 

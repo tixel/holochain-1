@@ -225,7 +225,7 @@ where
             .iter()
             .flatten()
             .filter_map(|r| {
-                if let changelog::WorkspaceRelease::Release(heading) = r {
+                if let changelog::CrateRelease::Release(heading) = r {
                     Some(heading.title.clone())
                 } else {
                     None
