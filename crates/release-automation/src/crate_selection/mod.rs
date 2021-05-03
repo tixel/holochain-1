@@ -117,7 +117,7 @@ impl<'a> ReleaseWorkspace<'a> {
             members.iter().map(|m| m.name()).collect::<Vec<_>>()
         );
 
-        let changed = changed_crates(members)?;
+        let changed = changed_crates(self.root()?, members)?;
         let releasable = releasable_crates(members)?;
 
         let changed_and_unreleasable = changed.difference(&releasable);
@@ -210,10 +210,12 @@ where
 }
 
 /// Returns the indices of all crates that changed since its last release.
-fn changed_crates<'a, C>(crates: C) -> Fallible<BTreeSet<usize>>
+fn changed_crates<'a, C>(workspace_root: &Path, crates: C) -> Fallible<BTreeSet<usize>>
 where
     C: std::iter::IntoIterator<Item = &'a Crate<'a>>,
 {
+    let git_repo = git2::Repository::open(workspace_root)?;
+
     let mut changed = BTreeSet::new();
 
     for (index, candidate) in crates.into_iter().enumerate() {
@@ -235,20 +237,20 @@ where
             .next();
 
         let git_tag = if let Some(ref previous_release) = previous_release {
-            let git_repo = git2::Repository::open(candidate.root())?;
-
             // lookup the git tag for the previous release
             git_repo
-                .find_tag(git2::Oid::from_str(&previous_release)?)
-                .map(
-                    // todo: double-check the tag name?
-                    |_| Some(previous_release),
-                )?
+                // todo: derive the tagname from a function
+                .revparse_single(&format!("{}-{}", candidate.name(), previous_release))
+                .ok()
+                .map(|obj| obj.id())
+                .map(|id| git_repo.find_tag(id).ok())
+                .flatten()
+                .map(|tag| tag.name().unwrap_or_default().to_owned())
         } else {
             None
         };
 
-        let change_indicator = if let Some(git_tag) = git_tag {
+        let change_indicator = if let Some(git_tag) = &git_tag {
             let changed_files = changed_files(candidate.package.root(), &git_tag, "HEAD")?;
 
             if changed_files.len() > 0 {

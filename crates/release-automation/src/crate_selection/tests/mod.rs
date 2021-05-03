@@ -93,6 +93,9 @@ fn final_selection() {
     let workspace_mocker = example_workspace_1().unwrap();
     let workspace = ReleaseWorkspace::try_new(workspace_mocker.root()).unwrap();
 
+    // todo: tag releases for crate_a and crate_b
+    // todo: change crate_a and crate_b in the working tree
+
     let selection = workspace
         .final_selection()
         .unwrap()
