@@ -1,6 +1,6 @@
 //! Select which crates to include in the release process.
 
-use crate::changelog::{self, CrateChangelog};
+use crate::changelog::{self, ChangeType, CrateChangelog};
 use crate::Fallible;
 
 use anyhow::{anyhow, bail};
@@ -219,14 +219,14 @@ where
     for (index, candidate) in crates.into_iter().enumerate() {
         let previous_release = candidate
             .changelog()
-            .map(changelog::CrateChangelog::releases)
+            .map(changelog::CrateChangelog::changes)
             .map(Result::ok)
             .flatten()
             .iter()
             .flatten()
             .filter_map(|r| {
-                if let changelog::CrateRelease::Release(heading) = r {
-                    Some(heading.title.clone())
+                if !r.change_type().is_unreleased() {
+                    Some(r.title.clone())
                 } else {
                     None
                 }
