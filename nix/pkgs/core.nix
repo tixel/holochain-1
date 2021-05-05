@@ -25,6 +25,11 @@ rec {
     cargo test --lib --manifest-path=crates/test_utils/wasm/wasm_workspace/Cargo.toml --all-features -- --nocapture
   '';
 
+  hcReleaseAutomationTest = writeShellScriptBin "hc-release-automation-test" ''
+    # run the release-automation tests
+    cargo test --manifest-path=crates/release-automation/Cargo.toml ''${@}
+  '';
+
   hcMergeTest = let
       pathPrefix = lib.makeBinPath
         (builtins.attrValues { inherit (holonix.pkgs)
@@ -42,13 +47,14 @@ rec {
     hn-rust-fmt-check
     hn-rust-clippy
     hc-test
+    hc-release-automation-test
   '';
 
   hcSpeedTest = writeShellScriptBin "hc-speed-test" ''
     cargo test speed_test_prep --test speed_tests --release --manifest-path=crates/holochain/Cargo.toml --features "build_wasms" -- --ignored
     cargo test speed_test_all --test speed_tests --release --manifest-path=crates/holochain/Cargo.toml --features "build_wasms" -- --ignored --nocapture
   '';
-  
+
   hcFlakyTest = writeShellScriptBin "hc-flaky-test" ''
     set -euxo pipefail
     export RUST_BACKTRACE=1
