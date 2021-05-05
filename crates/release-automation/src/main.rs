@@ -22,6 +22,7 @@ pub(crate) mod cli {
     #[structopt(name = "ra")]
     pub(crate) enum Commands {
         Changelog(Changelog),
+        Members(Members),
     }
 
     #[derive(StructOpt, Debug)]
@@ -34,14 +35,36 @@ pub(crate) mod cli {
         /// Output CHANGELOG.md file to update
         output_path: PathBuf,
     }
+
+    #[derive(StructOpt, Debug)]
+    pub(crate) struct Members {
+        #[structopt(long)]
+        pub(crate) workspace_path: PathBuf,
+
+        #[structopt(long)]
+        pub(crate) release_selection: bool,
+    }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let command = <cli::Commands as structopt::StructOpt>::from_args();
 
     match command {
-        cli::Commands::Changelog(cl) => {
-            println!("changelog: {:#?}", cl);
+        cli::Commands::Changelog(cfg) => {
+            println!("changelog: {:#?}", cfg);
+        }
+
+        cli::Commands::Members(cfg) => {
+            println!("Crates: {:#?}", cfg);
+            let rw = crate_selection::ReleaseWorkspace::try_new(cfg.workspace_path)?;
+
+            let crates = if cfg.release_selection {
+                rw.release_selection()?
+            } else {
+                rw.members()?.iter().collect()
+            };
+
+            println!("{:#?}", crates);
         }
     }
 

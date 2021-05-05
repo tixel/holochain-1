@@ -17,7 +17,7 @@ mod aliases {
 use aliases::*;
 
 #[derive(Debug)]
-struct Crate<'a> {
+pub(crate) struct Crate<'a> {
     package: CargoPackage,
     changelog: Option<CrateChangelog<'a>>,
 }
@@ -59,7 +59,7 @@ impl<'a> Crate<'a> {
     }
 }
 
-struct ReleaseWorkspace<'a> {
+pub(crate) struct ReleaseWorkspace<'a> {
     root_path: PathBuf,
     cargo_config: cargo::util::config::Config,
     cargo_workspace: OnceCell<CargoWorkspace<'a>>,
@@ -153,7 +153,7 @@ impl<'a> ReleaseWorkspace<'a> {
     }
 
     /// Returns all non-excluded workspace members.
-    fn members(&'a self) -> Fallible<&'a Vec<Crate>> {
+    pub(crate) fn members(&'a self) -> Fallible<&'a Vec<Crate>> {
         self.members.get_or_try_init(|| {
             let mut members = vec![];
 
@@ -240,7 +240,7 @@ where
             // lookup the git tag for the previous release
             git_repo
                 // todo: derive the tagname from a function
-                .revparse_single(&format!("{}-{}", candidate.name(), previous_release))
+                .revparse_single(&format!("{}-v{}", candidate.name(), previous_release))
                 .ok()
                 .map(|obj| obj.id())
                 .map(|id| git_repo.find_tag(id).ok())

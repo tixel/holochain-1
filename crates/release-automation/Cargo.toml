@@ -19,10 +19,10 @@ semver = "0.11"
 serde = "1.0"
 serde_yaml = "0.8"
 educe = "0.4"
+indoc = "1.0"
+git2 = "0.13"
 
 [dev-dependencies]
 prettydiff = "0.4"
 tempfile = "3"
 cargo-test-support = { git = "https://github.com/rust-lang/cargo", branch = "rust-1.52.0" }
-git2 = "0.13"
-indoc = "1.0"
