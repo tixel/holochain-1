@@ -220,3 +220,10 @@ macro_rules! secure_primitive {
         }
     };
 }
+
+#[cfg(test)]
+pub static NOISE: once_cell::sync::Lazy<Vec<u8>> = once_cell::sync::Lazy::new(|| {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    std::iter::repeat_with(|| rng.gen()).take(999999).collect()
+});

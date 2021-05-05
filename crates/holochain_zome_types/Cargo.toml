@@ -30,12 +30,21 @@ rand = {version = "0.7", optional = true}
 # arbitrary
 arbitrary = { version = "1.0", features = ["derive"], optional = true}
 
+# contrafact
+contrafact = { git = "https://github.com/maackle/contrafact.git", branch = "main", optional = true }
+# contrafact = { path = "../../../contrafact", optional = true }
+
+[dev-dependencies]
+once_cell = "1.4"
+
 [features]
 default = ["fixturators", "test_utils"]
 
 fixturators = ["fixt", "rand", "strum", "holo_hash/fixturators", ]
 
 test_utils = [
+  "arbitrary",
+  "contrafact",
   "holo_hash/hashing",
   "holo_hash/arbitrary",
   "holochain_serialized_bytes/arbitrary",

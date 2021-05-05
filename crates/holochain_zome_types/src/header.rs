@@ -14,6 +14,8 @@ use holochain_serialized_bytes::prelude::*;
 
 pub mod builder;
 pub mod conversions;
+#[cfg(any(test, feature = "test_utils"))]
+pub mod facts;
 
 /// Any header with a header_seq less than this value is part of an element
 /// created during genesis. Anything with this seq or higher was created

@@ -303,3 +303,34 @@ impl TryFrom<Element> for DeleteLink {
             .try_into()
     }
 }
+
+// /// Facts for Elements
+// pub mod facts {
+//     use crate::prelude::*;
+//     use ::contrafact::*;
+//     use holo_hash::*;
+
+//     fn valid_element() -> Facts<'static, Element> {
+//         vec![
+//             conditional("new entry header?", |el: &Element| {
+//                 match el.entry_data() {
+//                     Header::Create(Create { entry_hash, .. })
+//                     | Header::Update(Update { entry_hash, .. }) => {
+//                         todo!()
+//                     }
+//             })
+
+//         custom(
+//             "Element header matches entry",
+//             |el: &Element| match el.header() {
+//                 Header::Create(Create { entry_hash, .. })
+//                 | Header::Update(Update { entry_hash, .. }) => el
+//                     .entry()
+//                     .as_option()
+//                     .map(|entry| *entry_hash == EntryHash::with_data_sync(entry))
+//                     .unwrap_or(false),
+//                 _ => el.entry().as_option().is_none(),
+//             },
+//         )]
+//     }
+// }
