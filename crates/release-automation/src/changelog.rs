@@ -224,57 +224,31 @@ where
                 print!("[{}] heading at level {}", i, heading.level);
 
                 if heading.level == level {
-                    for (j, node_j) in node.descendants().enumerate().skip(1) {
-                        if let NodeValue::Text(ref text) = &node_j.data.borrow().value {
-                            let text_str = String::from_utf8_lossy(text);
+                    if let Some(text_str) = get_heading_text(node) {
+                        let descending_headings = node
+                            .following_siblings()
+                            .skip(1)
+                            .take_while(|node_k| match &node_k.data.borrow().value {
+                                &NodeValue::Heading(heading_k) => heading_k.level > level,
 
-                            let mut next_heading_reached = false;
-                            let descending_headings = node
-                                .following_siblings()
-                                .filter_map(|node_k| {
-                                    if next_heading_reached {
-                                        return None;
-                                    }
+                                _ => true,
+                            })
+                            .filter_map(|node_k| match &node_k.data.borrow().value {
+                                &NodeValue::Heading(heading_k) => {
+                                    get_heading_text(node_k).map(|s| (heading_k.level, s))
+                                }
 
-                                    match &node_k.data.borrow().value {
-                                        &NodeValue::Heading(heading_k) => {
-                                            if heading_k.level == level {
-                                                next_heading_reached = !node_k.same_node(node);
-                                                None
-                                            } else if heading_k.level < level {
-                                                None
-                                            } else {
-                                                node_k.descendants().skip(1).fold(
-                                                    Some(String::new()),
-                                                    |acc, node_l| {
-                                                        if let NodeValue::Text(ref text) =
-                                                            &node_l.data.borrow().value
-                                                        {
-                                                            acc.map(|s| {
-                                                                s + &String::from_utf8_lossy(text)
-                                                            })
-                                                        } else {
-                                                            acc
-                                                        }
-                                                    },
-                                                )
-                                            }
-                                            .map(|s| (heading_k.level, s))
-                                        }
+                                _ => None,
+                            })
+                            .collect::<Vec<_>>();
 
-                                        _ => None,
-                                    }
-                                })
-                                .collect::<Vec<_>>();
+                        let change = f(text_str.to_string(), descending_headings);
 
-                            let change = f(text_str.to_string(), descending_headings);
-
-                            print!(
-                                " => [{}] derived release '{:?}' from text '{}'",
-                                j, change, text_str
-                            );
-                            changes.push(change);
-                        }
+                        print!(
+                            " => [{}] derived release '{:?}' from text '{}'",
+                            i, change, text_str
+                        );
+                        changes.push(change);
                     }
                 }
 
@@ -286,6 +260,17 @@ where
     }
 
     Ok(changes.into_iter().filter_map(|o| o).collect())
+}
+
+fn get_heading_text<'a>(node: &'a comrak::arena_tree::Node<'a, RefCell<Ast>>) -> Option<String> {
+    node.descendants().skip(1).fold(None, |acc, node_l| {
+        if let NodeValue::Text(ref text) = &node_l.data.borrow().value {
+            let text_str = String::from_utf8_lossy(text).to_string();
+            acc.map_or(Some(text_str.clone()), |v| Some(v + &text_str))
+        } else {
+            acc
+        }
+    })
 }
 
 fn process_unreleased(inputs: &[(&str, PathBuf)], output: &PathBuf) -> Fallible<()> {
@@ -380,17 +365,14 @@ fn process_unreleased_strings(
                         node.detach();
                     }
                     (None, 1) => {
-                        for (j, node_j) in node.descendants().enumerate().skip(1) {
-                            if let NodeValue::Text(ref text) = &node_j.data.borrow().value {
-                                let text_str = String::from_utf8_lossy(text);
-                                print!(" => [{}] found text '{}'", j, text_str);
-                                if text_str.to_lowercase().contains("unreleased") {
-                                    print!(" => found unreleased section");
-                                    unreleased_node = Some(node);
-                                    remove_other = false;
-                                    break;
-                                };
-                            }
+                        if let Some(text_str) = get_heading_text(node) {
+                            print!(" => [{}] found heading text '{}'", i, text_str);
+
+                            if text_str.to_lowercase().contains("unreleased") {
+                                print!(" => found unreleased section");
+                                unreleased_node = Some(node);
+                                remove_other = false;
+                            };
                         }
                     }
                     (None, _) => {}
