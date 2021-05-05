@@ -1,11 +1,3 @@
----
-# values: skip|dry-run|run
-mode: skip
-# values: skip|major|minor|patch|prerelease
-bump-version: skip
-# values: current|next
-publish-version: skip
----
 # Changelog
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
