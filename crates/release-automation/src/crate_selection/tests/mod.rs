@@ -89,12 +89,12 @@ fn detect_changed_crates() {
 }
 
 #[test]
-fn final_selection() {
+fn release_selection() {
     let workspace_mocker = example_workspace_1().unwrap();
     let workspace = ReleaseWorkspace::try_new(workspace_mocker.root()).unwrap();
 
     let selection = workspace
-        .final_selection()
+        .release_selection()
         .unwrap()
         .into_iter()
         .map(|c| c.name())

@@ -63,7 +63,7 @@ struct ReleaseWorkspace<'a> {
     root_path: PathBuf,
     cargo_config: cargo::util::config::Config,
     cargo_workspace: OnceCell<CargoWorkspace<'a>>,
-    crates: OnceCell<Vec<Crate<'a>>>,
+    members: OnceCell<Vec<Crate<'a>>>,
 }
 
 impl std::fmt::Debug for ReleaseWorkspace<'_> {
@@ -75,12 +75,12 @@ impl std::fmt::Debug for ReleaseWorkspace<'_> {
                 root_path: {:?},
                 cargo_config: <omitted>
                 cargo_workspace: {:#?}
-                crates: {:#?}
+                members: {:#?}
             }}
             "#,
             self.root_path,
             self.cargo_workspace.get(),
-            self.crates.get()
+            self.members.get(),
         )?;
 
         Ok(())
@@ -94,7 +94,7 @@ impl<'a> ReleaseWorkspace<'a> {
             cargo_config: cargo::util::config::Config::default()?,
 
             cargo_workspace: Default::default(),
-            crates: Default::default(),
+            members: Default::default(),
         };
 
         // todo(optimization): eagerly ensure that the workspace is valid, but the following fails lifetime checks
@@ -110,7 +110,7 @@ impl<'a> ReleaseWorkspace<'a> {
     }
 
     /// Returns the crates that are going to be processed for release.
-    pub(crate) fn final_selection(&'a self) -> Fallible<Vec<&'a Crate>> {
+    pub(crate) fn release_selection(&'a self) -> Fallible<Vec<&'a Crate>> {
         let members = self.members()?;
         println!(
             "all members: {:#?}",
@@ -154,16 +154,16 @@ impl<'a> ReleaseWorkspace<'a> {
 
     /// Returns all non-excluded workspace members.
     fn members(&'a self) -> Fallible<&'a Vec<Crate>> {
-        self.crates.get_or_try_init(|| {
-            let mut crates = vec![];
+        self.members.get_or_try_init(|| {
+            let mut members = vec![];
 
             for package in self.cargo_workspace()?.members() {
-                crates.push(Crate::with_cargo_package(package.to_owned())?);
+                members.push(Crate::with_cargo_package(package.to_owned())?);
             }
 
             // todo: ensure members are ordered respecting their dependency tree
 
-            Ok(crates)
+            Ok(members)
         })
     }
 
